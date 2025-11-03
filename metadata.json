@@ -1,0 +1,5 @@
+{
+  "name": "Chicago Vegan Cookbook Club",
+  "description": "A simple app to track the dishes different people are bringing to a monthly potluck. Users can add a dish with details like the person's name, allergens, and category.",
+  "requestFramePermissions": []
+}
