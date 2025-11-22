@@ -10,17 +10,29 @@ interface AdminModalProps {
   onDelete: (id: number) => void;
 }
 
-const initialPotluckFormState = {
+// Helper interface for form state which may handle numbers as empty strings during input
+interface PotluckFormState {
+    name: string;
+    bookTheme: string;
+    host: string;
+    neighborhood: string;
+    date: string;
+    time: string;
+    dishCap: string | number;
+}
+
+const initialPotluckFormState: PotluckFormState = {
     name: '',
     bookTheme: '',
     host: '',
     neighborhood: '',
     date: '',
     time: '',
+    dishCap: '',
 };
 
 const PotluckFormFields: React.FC<{
-    data: Omit<Potluck, 'id' | 'dishes'>;
+    data: PotluckFormState;
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }> = ({ data, onChange }) => (
     <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
@@ -48,14 +60,20 @@ const PotluckFormFields: React.FC<{
             <label htmlFor="time" className="block text-sm font-medium text-gray-600 mb-1">Time</label>
             <input id="time" name="time" value={data.time || ''} onChange={onChange} placeholder="e.g., 6:00 PM" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
         </div>
+        <div>
+            <label htmlFor="dishCap" className="block text-sm font-medium text-gray-600 mb-1">Max Dishes (Optional Cap)</label>
+            <input type="number" id="dishCap" name="dishCap" value={data.dishCap} onChange={onChange} min="1" placeholder="e.g., 25" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+        </div>
     </div>
 );
 
 
 const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose, potlucks, onAdd, onEdit, onDelete }) => {
   const [view, setView] = useState<'menu' | 'add' | 'editList' | 'editForm' | 'delete'>('menu');
-  const [potluckForm, setPotluckForm] = useState(initialPotluckFormState);
-  const [editingPotluck, setEditingPotluck] = useState<Potluck | null>(null);
+  const [potluckForm, setPotluckForm] = useState<PotluckFormState>(initialPotluckFormState);
+  // We use a separate state for editing to allow the flexible string/number type for inputs
+  const [editingFormState, setEditingFormState] = useState<PotluckFormState | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   if (!isOpen) {
     return null;
@@ -65,15 +83,19 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose, potlucks, onAd
     const { name, value } = e.target;
     if (view === 'add') {
          setPotluckForm(prev => ({ ...prev, [name]: value }));
-    } else if (view === 'editForm' && editingPotluck) {
-         setEditingPotluck(prev => prev ? { ...prev, [name]: value } : null);
+    } else if (view === 'editForm' && editingFormState) {
+         setEditingFormState(prev => prev ? { ...prev, [name]: value } : null);
     }
   };
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (potluckForm.name.trim()) {
-      onAdd(potluckForm);
+      const submissionData = {
+          ...potluckForm,
+          dishCap: potluckForm.dishCap === '' ? undefined : Number(potluckForm.dishCap)
+      };
+      onAdd(submissionData);
       setPotluckForm(initialPotluckFormState);
       setView('menu');
     }
@@ -91,25 +113,39 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose, potlucks, onAd
   
   const handleEditSave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingPotluck && editingPotluck.name.trim()) {
+    if (editingFormState && editingId !== null && editingFormState.name.trim()) {
         if (window.confirm('Are you sure you want to save these changes?')) {
-            const { id, dishes, ...potluckData } = editingPotluck;
-            onEdit(id, potluckData);
-            setEditingPotluck(null);
+            const submissionData = {
+                ...editingFormState,
+                dishCap: editingFormState.dishCap === '' ? undefined : Number(editingFormState.dishCap)
+            };
+            onEdit(editingId, submissionData);
+            setEditingFormState(null);
+            setEditingId(null);
             setView('editList');
         }
     }
   };
   
   const handleStartEdit = (potluck: Potluck) => {
-    setEditingPotluck({ ...potluck });
+    setEditingId(potluck.id);
+    setEditingFormState({
+        name: potluck.name,
+        bookTheme: potluck.bookTheme || '',
+        host: potluck.host || '',
+        neighborhood: potluck.neighborhood || '',
+        date: potluck.date || '',
+        time: potluck.time || '',
+        dishCap: potluck.dishCap === undefined ? '' : potluck.dishCap
+    });
     setView('editForm');
   };
 
   const resetToMenu = () => {
     setView('menu');
     setPotluckForm(initialPotluckFormState);
-    setEditingPotluck(null);
+    setEditingFormState(null);
+    setEditingId(null);
   };
   
   const renderMenu = () => (
@@ -167,13 +203,13 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose, potlucks, onAd
   );
 
   const renderEditForm = () => {
-    if (!editingPotluck) return null;
+    if (!editingFormState) return null;
     return (
         <form onSubmit={handleEditSave}>
-            <h3 className="text-lg font-semibold mb-3 text-gray-700">Editing "{editingPotluck.name}"</h3>
-            <PotluckFormFields data={editingPotluck} onChange={handleFormChange} />
+            <h3 className="text-lg font-semibold mb-3 text-gray-700">Editing "{editingFormState.name}"</h3>
+            <PotluckFormFields data={editingFormState} onChange={handleFormChange} />
             <div className="mt-6 flex justify-end gap-3">
-                <button type="button" onClick={() => { setEditingPotluck(null); setView('editList'); }} className="py-2 px-4 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">Back</button>
+                <button type="button" onClick={() => { setEditingFormState(null); setEditingId(null); setView('editList'); }} className="py-2 px-4 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">Back</button>
                 <button type="submit" className="py-2 px-4 border border-transparent rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700">Confirm Changes</button>
             </div>
         </form>

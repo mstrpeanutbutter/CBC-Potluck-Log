@@ -1,3 +1,4 @@
+
 export enum Category {
   MAIN = 'Main',
   APPETIZER = 'Appetizer',
@@ -6,6 +7,13 @@ export enum Category {
   BEVERAGE = 'Beverage',
   POTATO = 'Potato',
   BREAD = 'Bread',
+  DINNERWARE = 'Plates/Bowls/Cups/Etc',
+}
+
+export interface User {
+  id: string;
+  name: string;
+  isAdmin: boolean;
 }
 
 export interface Dish {
@@ -16,6 +24,7 @@ export interface Dish {
   category: Category;
   imageUrl?: string;
   extras?: string;
+  userId?: string; // ID of the user who created the dish
 }
 
 export interface Potluck {
@@ -27,4 +36,5 @@ export interface Potluck {
   neighborhood?: string;
   date?: string;
   time?: string;
+  dishCap?: number;
 }

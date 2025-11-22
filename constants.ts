@@ -1,3 +1,4 @@
+
 import { Category } from './types';
 
 export const CATEGORIES: Category[] = Object.values(Category);
@@ -10,6 +11,7 @@ export const CATEGORY_COLORS: Record<Category, string> = {
   [Category.BEVERAGE]: 'bg-blue-100 text-blue-800 border-blue-200',
   [Category.POTATO]: 'bg-orange-100 text-orange-800 border-orange-200',
   [Category.BREAD]: 'bg-amber-100 text-amber-800 border-amber-200',
+  [Category.DINNERWARE]: 'bg-purple-100 text-purple-800 border-purple-200',
 };
 
 export const CATEGORY_SORT_ORDER: Category[] = [
@@ -20,4 +22,5 @@ export const CATEGORY_SORT_ORDER: Category[] = [
   Category.DESSERT,
   Category.BEVERAGE,
   Category.POTATO,
+  Category.DINNERWARE,
 ];

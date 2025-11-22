@@ -1,15 +1,16 @@
-import React, { useState, useRef } from 'react';
-import { Dish, Category, Potluck } from './types';
+
+import React, { useState, useRef, useEffect } from 'react';
+import { Dish, Category, Potluck, User } from './types';
 import { CATEGORIES } from './constants';
 import DishList from './components/DishList';
 import PotluckMenu from './components/PotluckMenu';
 import AdminModal from './components/AdminModal';
 import PadlockIcon from './components/icons/PadlockIcon';
 import CategoryChart from './components/CategoryChart';
+import LoginScreen from './components/LoginScreen';
 
 const initialFormState = {
   dishName: '',
-  personName: '',
   allergens: '',
   extras: '',
   category: Category.MAIN,
@@ -78,16 +79,22 @@ const INITIAL_POTLUCKS: Potluck[] = [
         neighborhood: 'Logan Square',
         date: 'November 23, 2025',
         time: '5:00 PM',
+        dishCap: 40,
     },
     {
         id: 2,
         name: 'Soupvember 2025',
         dishes: SOUPVEMBER_DISHES,
+        dishCap: 25,
     }
 ];
 
 
 const App: React.FC = () => {
+  // User State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  
+  // App State
   const [potlucks, setPotlucks] = useState<Potluck[]>(INITIAL_POTLUCKS);
   const [selectedPotluckId, setSelectedPotluckId] = useState<number>(INITIAL_POTLUCKS[0].id);
   const [newDish, setNewDish] = useState(initialFormState);
@@ -96,8 +103,38 @@ const App: React.FC = () => {
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
 
+  // Load user from local storage on mount
+  useEffect(() => {
+    const storedUser = localStorage.getItem('cvcc_user');
+    if (storedUser) {
+      try {
+        setCurrentUser(JSON.parse(storedUser));
+      } catch (e) {
+        localStorage.removeItem('cvcc_user');
+      }
+    }
+  }, []);
+
+  const handleJoin = (name: string) => {
+    const newUser: User = {
+      id: Date.now().toString(),
+      name: name,
+      isAdmin: false
+    };
+    setCurrentUser(newUser);
+    localStorage.setItem('cvcc_user', JSON.stringify(newUser));
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('cvcc_user');
+  };
+
   const activePotluck = potlucks.find(p => p.id === selectedPotluckId);
   const activeDishes = activePotluck ? activePotluck.dishes : [];
+  const dishCap = activePotluck?.dishCap;
+  // Only consider full if cap is defined and we reached it
+  const isFull = dishCap !== undefined && activeDishes.length >= dishCap;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -111,7 +148,6 @@ const App: React.FC = () => {
       reader.onloadend = () => {
         setNewDish(prev => ({ ...prev, imageUrl: reader.result as string }));
       };
-      // FIX: Corrected typo from readDataURL to readAsDataURL.
       reader.readAsDataURL(file);
     }
   };
@@ -120,7 +156,6 @@ const App: React.FC = () => {
     setEditingDishId(dish.id);
     setNewDish({
       dishName: dish.dishName,
-      personName: dish.personName,
       allergens: dish.allergens,
       extras: dish.extras || '',
       category: dish.category,
@@ -150,9 +185,23 @@ const App: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newDish.dishName.trim() || !newDish.personName.trim()) {
-      setError('Dish name and your name are required.');
+    
+    if (!currentUser) return;
+
+    if (!newDish.dishName.trim()) {
+      setError('Dish name is required.');
       return;
+    }
+
+    if (!newDish.allergens.trim()) {
+      setError('Allergens field is required. Please write "N/A" if no major allergens are present.');
+      return;
+    }
+
+    // Prevent adding if full and not editing an existing dish
+    if (isFull && editingDishId === null) {
+        setError('This potluck has reached its maximum capacity. No new dishes can be added.');
+        return;
     }
 
     setPotlucks(prevPotlucks => prevPotlucks.map(p => {
@@ -162,13 +211,22 @@ const App: React.FC = () => {
 
         let updatedDishes;
         if (editingDishId !== null) {
+            // Updating existing dish
             updatedDishes = p.dishes.map(dish => 
-                dish.id === editingDishId ? { ...dish, ...newDish } : dish
+                dish.id === editingDishId 
+                  ? { ...dish, ...newDish } // Keep original personName and userId
+                  : dish
             );
         } else {
+            // Creating new dish
             updatedDishes = [
                 ...p.dishes,
-                { id: Date.now(), ...newDish }
+                { 
+                  id: Date.now(), 
+                  personName: currentUser.name, // Auto-fill name
+                  userId: currentUser.id,     // Auto-fill user ID
+                  ...newDish 
+                }
             ];
         }
         return { ...p, dishes: updatedDishes };
@@ -178,10 +236,23 @@ const App: React.FC = () => {
   };
   
   const handleAdminClick = () => {
+    // If user is already admin, open modal to manage potlucks
+    if (currentUser?.isAdmin) {
+        setIsAdminModalOpen(true);
+        return;
+    }
+
+    // Otherwise, try to login as admin
     const password = prompt('Enter admin password:');
     if (password === 'susscrofadomesticus') {
-      setIsAdminModalOpen(true);
-    } else if (password !== null) { // Don't alert if user cancels
+      if (currentUser) {
+          const adminUser = { ...currentUser, isAdmin: true };
+          setCurrentUser(adminUser);
+          localStorage.setItem('cvcc_user', JSON.stringify(adminUser));
+          alert("You are now in Admin Mode. You can edit all dishes.");
+          setIsAdminModalOpen(true);
+      }
+    } else if (password !== null) { 
       alert('Incorrect password.');
     }
   };
@@ -193,7 +264,7 @@ const App: React.FC = () => {
       dishes: [],
     };
     setPotlucks(prev => [...prev, newPotluck]);
-    setSelectedPotluckId(newPotluck.id); // Switch to the new potluck
+    setSelectedPotluckId(newPotluck.id); 
   };
 
   const handleDeletePotluck = (id: number) => {
@@ -213,20 +284,28 @@ const App: React.FC = () => {
   };
 
 
+  // If no user is logged in, show Login Screen
+  if (!currentUser) {
+    return <LoginScreen onJoin={handleJoin} />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800 font-sans p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto relative">
         <header className="text-center mb-8">
-           <div className="absolute top-0 left-0 p-2 sm:p-0 z-10">
+           <div className="absolute top-0 left-0 p-2 sm:p-0 z-10 flex items-center gap-2">
                 <button
                     onClick={handleAdminClick}
-                    className="p-2 rounded-full text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                    className={`p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors ${currentUser.isAdmin ? 'text-green-600 bg-green-100 hover:bg-green-200' : 'text-gray-400 hover:bg-gray-100'}`}
                     aria-label="Admin Settings"
+                    title={currentUser.isAdmin ? "Admin Settings" : "Unlock Admin Mode"}
                 >
                     <PadlockIcon />
                 </button>
             </div>
-          <div className="absolute top-0 right-0 p-2 sm:p-0 z-10">
+          <div className="absolute top-0 right-0 p-2 sm:p-0 z-10 flex items-center gap-2">
+            <span className="hidden sm:block text-sm text-gray-500">Hi, {currentUser.name}</span>
+            <button onClick={handleLogout} className="text-xs text-red-500 underline hover:text-red-700 mr-2">Logout</button>
             <PotluckMenu 
               potlucks={potlucks} 
               selectedPotluckId={selectedPotluckId} 
@@ -248,114 +327,151 @@ const App: React.FC = () => {
 
         <main>
           <div ref={formRef} className="bg-white p-6 sm:p-8 rounded-xl shadow-md mb-8 scroll-mt-4">
-            <h2 className="text-2xl font-semibold mb-6 text-gray-700">
-              {editingDishId ? 'Edit Dish' : 'Add a New Dish'}
-            </h2>
-            
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="dishName" className="block text-sm font-medium text-gray-600 mb-1">Dish Name</label>
-                  <input
-                    type="text"
-                    id="dishName"
-                    name="dishName"
-                    value={newDish.dishName}
-                    onChange={handleInputChange}
-                    placeholder="e.g., Spicy Black Bean Burgers"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                  />
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-semibold text-gray-700">
+                {editingDishId ? 'Edit Dish' : 'Add a New Dish'}
+                </h2>
+                <div className="text-sm bg-green-50 text-green-800 px-3 py-1 rounded-full">
+                    Posting as: <strong>{currentUser.name}</strong>
                 </div>
-                <div>
-                  <label htmlFor="personName" className="block text-sm font-medium text-gray-600 mb-1">Your Name</label>
-                  <input
-                    type="text"
-                    id="personName"
-                    name="personName"
-                    value={newDish.personName}
-                    onChange={handleInputChange}
-                    placeholder="e.g., Alex Doe"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                  />
-                </div>
-              </div>
+            </div>
 
-              <div>
-                <label htmlFor="allergens" className="block text-sm font-medium text-gray-600 mb-1">Major Allergens (optional)</label>
-                <input
-                  type="text"
-                  id="allergens"
-                  name="allergens"
-                  value={newDish.allergens}
-                  onChange={handleInputChange}
-                  placeholder="e.g., Nuts, Soy"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="extras" className="block text-sm font-medium text-gray-600 mb-1">Any Extras (optional)</label>
-                <input
-                  type="text"
-                  id="extras"
-                  name="extras"
-                  value={newDish.extras || ''}
-                  onChange={handleInputChange}
-                  placeholder="e.g., Serving spoons, extension cord"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="category" className="block text-sm font-medium text-gray-600 mb-1">Category</label>
-                <select
-                  id="category"
-                  name="category"
-                  value={newDish.category}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white"
-                >
-                  {CATEGORIES.map(category => (
-                    <option key={category} value={category}>{category}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-600 mb-1">Dish Image (optional)</label>
-                <input
-                  type="file"
-                  id="imageUrl"
-                  name="imageUrl"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                />
-                {newDish.imageUrl && (
-                  <div className="mt-4">
-                    <img src={newDish.imageUrl} alt="Preview" className="w-32 h-32 object-cover rounded-md border border-gray-200" />
+            {dishCap && (
+                <div className="mb-6">
+                  <div className="flex justify-between text-sm font-medium text-gray-600 mb-1">
+                    <span>Potluck Capacity</span>
+                    <span className={isFull ? 'text-red-600 font-bold' : 'text-green-600'}>
+                      {activeDishes.length} / {dishCap} filled
+                    </span>
                   </div>
-                )}
-              </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                    <div 
+                      className={`h-2.5 transition-all duration-500 ${
+                        isFull ? 'bg-red-500' : activeDishes.length >= dishCap * 0.8 ? 'bg-yellow-400' : 'bg-green-500'
+                      }`} 
+                      style={{ width: `${Math.min(100, (activeDishes.length / dishCap) * 100)}%` }}
+                    ></div>
+                  </div>
+                  {isFull && !editingDishId && (
+                      <p className="text-red-500 text-sm mt-2 font-medium">
+                          This potluck has reached its maximum capacity. No new dishes can be added at this time.
+                      </p>
+                  )}
+                </div>
+            )}
+            
+            <fieldset disabled={isFull && !editingDishId} className="group disabled:opacity-60">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                    <label htmlFor="dishName" className="block text-sm font-medium text-gray-600 mb-1">Dish Name</label>
+                    <input
+                        type="text"
+                        id="dishName"
+                        name="dishName"
+                        value={newDish.dishName}
+                        onChange={handleInputChange}
+                        placeholder="e.g., Spicy Black Bean Burgers"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    />
+                    </div>
+                    <div>
+                        <label htmlFor="category" className="block text-sm font-medium text-gray-600 mb-1">Category</label>
+                        <select
+                        id="category"
+                        name="category"
+                        value={newDish.category}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white"
+                        >
+                        {CATEGORIES.map(category => (
+                            <option key={category} value={category}>{category}</option>
+                        ))}
+                        </select>
+                    </div>
+                </div>
 
-              {error && <p className="text-sm text-red-600">{error}</p>}
+                <div>
+                    <label htmlFor="allergens" className="block text-sm font-medium text-gray-600 mb-1">Major Allergens</label>
+                    <input
+                    type="text"
+                    id="allergens"
+                    name="allergens"
+                    value={newDish.allergens}
+                    onChange={handleInputChange}
+                    placeholder="e.g., Nuts, Soy"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Write "N/A" if no major allergens present.</p>
+                </div>
 
-              <div className="flex justify-end items-center gap-4 pt-2">
-                {editingDishId && (
-                  <button type="button" onClick={handleCancelEdit} className="py-2 px-6 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
-                    Cancel
-                  </button>
-                )}
-                <button type="submit" className="inline-flex justify-center py-2 px-6 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
-                  {editingDishId ? 'Update Dish' : 'Add Dish'}
-                </button>
-              </div>
-            </form>
+                <div>
+                    <label htmlFor="extras" className="block text-sm font-medium text-gray-600 mb-1">Any Extras (optional)</label>
+                    <input
+                    type="text"
+                    id="extras"
+                    name="extras"
+                    value={newDish.extras || ''}
+                    onChange={handleInputChange}
+                    placeholder="e.g., Serving spoons, extension cord"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    />
+                </div>
+
+                <div>
+                    <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-600 mb-1">Dish Image (optional)</label>
+                    <input
+                    type="file"
+                    id="imageUrl"
+                    name="imageUrl"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    />
+                    {newDish.imageUrl && (
+                    <div className="mt-4">
+                        <img src={newDish.imageUrl} alt="Preview" className="w-32 h-32 object-cover rounded-md border border-gray-200" />
+                    </div>
+                    )}
+                </div>
+
+                <p className="text-sm text-red-600 font-medium">
+                    ALLERGENS (please share if your dish contains the following): hemp seeds, gluten, peanuts, other nuts, etc
+                </p>
+
+                {error && <p className="text-sm text-red-600">{error}</p>}
+
+                <div className="flex justify-end items-center gap-4 pt-2">
+                    {editingDishId && (
+                    <button type="button" onClick={handleCancelEdit} className="py-2 px-6 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
+                        Cancel
+                    </button>
+                    )}
+                    <button 
+                        type="submit" 
+                        disabled={isFull && !editingDishId}
+                        className={`inline-flex justify-center py-2 px-6 border border-transparent shadow-sm text-sm font-medium rounded-md text-white transition-colors
+                            ${isFull && !editingDishId 
+                                ? 'bg-gray-400 cursor-not-allowed' 
+                                : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+                            }`}
+                    >
+                    {editingDishId ? 'Update Dish' : 'Add Dish'}
+                    </button>
+                </div>
+                </form>
+            </fieldset>
           </div>
 
           <CategoryChart dishes={activeDishes} />
 
-          <DishList dishes={activeDishes} onEdit={handleStartEdit} onDelete={handleDeleteDish} />
+          <DishList 
+            dishes={activeDishes} 
+            currentUserId={currentUser.id}
+            isAdmin={currentUser.isAdmin}
+            onEdit={handleStartEdit} 
+            onDelete={handleDeleteDish} 
+          />
         </main>
       </div>
       <AdminModal

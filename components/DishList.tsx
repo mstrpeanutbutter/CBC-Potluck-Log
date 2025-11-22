@@ -5,11 +5,13 @@ import { CATEGORY_SORT_ORDER } from '../constants';
 
 interface DishListProps {
   dishes: Dish[];
+  currentUserId: string;
+  isAdmin: boolean;
   onEdit: (dish: Dish) => void;
   onDelete: (id: number) => void;
 }
 
-const DishList: React.FC<DishListProps> = ({ dishes, onEdit, onDelete }) => {
+const DishList: React.FC<DishListProps> = ({ dishes, currentUserId, isAdmin, onEdit, onDelete }) => {
   const groupedDishes = dishes.reduce((acc, dish) => {
     const category = dish.category;
     if (!acc[category]) {
@@ -35,6 +37,8 @@ const DishList: React.FC<DishListProps> = ({ dishes, onEdit, onDelete }) => {
               key={category}
               category={category}
               dishes={groupedDishes[category]}
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
               onEdit={onEdit}
               onDelete={onDelete}
             />

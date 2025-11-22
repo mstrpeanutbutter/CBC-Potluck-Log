@@ -6,6 +6,8 @@ import { CATEGORY_COLORS } from '../constants';
 interface CategorySectionProps {
   category: Category;
   dishes: Dish[];
+  currentUserId: string;
+  isAdmin: boolean;
   onEdit: (dish: Dish) => void;
   onDelete: (id: number) => void;
 }
@@ -23,7 +25,7 @@ const ChevronIcon: React.FC<{ isOpen: boolean }> = ({ isOpen }) => (
 );
 
 
-const CategorySection: React.FC<CategorySectionProps> = ({ category, dishes, onEdit, onDelete }) => {
+const CategorySection: React.FC<CategorySectionProps> = ({ category, dishes, currentUserId, isAdmin, onEdit, onDelete }) => {
   const [isOpen, setIsOpen] = useState(true);
   const categoryColorClasses = CATEGORY_COLORS[category] || 'bg-gray-100 text-gray-800 border-gray-200';
   const headerBgClass = categoryColorClasses.split(' ')[0].replace('bg-', 'bg-') + '/20';
@@ -47,6 +49,8 @@ const CategorySection: React.FC<CategorySectionProps> = ({ category, dishes, onE
             <DishItem
               key={dish.id}
               dish={dish}
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
               onEdit={() => onEdit(dish)}
               onDelete={() => onDelete(dish.id)}
             />

@@ -4,12 +4,19 @@ import { CATEGORY_COLORS } from '../constants';
 
 interface DishItemProps {
   dish: Dish;
+  currentUserId: string;
+  isAdmin: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-const DishItem: React.FC<DishItemProps> = ({ dish, onEdit, onDelete }) => {
+const DishItem: React.FC<DishItemProps> = ({ dish, currentUserId, isAdmin, onEdit, onDelete }) => {
   const categoryColor = CATEGORY_COLORS[dish.category];
+
+  // Permission Logic:
+  // 1. Admin can edit anything.
+  // 2. Users can edit their own dishes (matching userId).
+  const canModify = isAdmin || (dish.userId === currentUserId);
 
   return (
     <div className="border border-gray-200 rounded-lg p-4 flex flex-col sm:flex-row gap-4 transition-shadow hover:shadow-md bg-gray-50/50">
@@ -40,10 +47,13 @@ const DishItem: React.FC<DishItemProps> = ({ dish, onEdit, onDelete }) => {
           <span className={`inline-block px-3 py-1 text-xs font-semibold rounded-full border ${categoryColor}`}>
               {dish.category}
           </span>
-          <div className="flex items-center gap-3">
-              <button onClick={onEdit} aria-label={`Edit ${dish.dishName}`} className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors">Edit</button>
-              <button onClick={onDelete} aria-label={`Delete ${dish.dishName}`} className="text-sm text-red-600 hover:text-red-800 font-medium transition-colors">Delete</button>
-          </div>
+          
+          {canModify && (
+            <div className="flex items-center gap-3">
+                <button onClick={onEdit} aria-label={`Edit ${dish.dishName}`} className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors">Edit</button>
+                <button onClick={onDelete} aria-label={`Delete ${dish.dishName}`} className="text-sm text-red-600 hover:text-red-800 font-medium transition-colors">Delete</button>
+            </div>
+          )}
         </div>
       </div>
     </div>
