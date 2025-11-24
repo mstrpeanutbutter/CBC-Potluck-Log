@@ -48,6 +48,11 @@ const DishItem: React.FC<DishItemProps> = ({ dish, currentUserId, isAdmin, onEdi
               <span className="font-semibold">Extras:</span> {dish.extras}
             </p>
           )}
+          {dish.isParticipatingInCookieSwap && (
+            <p className="text-sm text-yellow-700 mt-1 bg-yellow-50 inline-block px-2 py-0.5 rounded border border-yellow-100">
+                🍪 <span className="font-semibold">Cookie Swap:</span> {dish.cookieSwapDescription || 'Participating'}
+            </p>
+          )}
         </div>
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-200">
           <span className={`inline-block px-3 py-1 text-xs font-semibold rounded-full border ${categoryColor}`}>

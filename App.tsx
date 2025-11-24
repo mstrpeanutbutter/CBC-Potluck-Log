@@ -17,6 +17,8 @@ const initialFormState = {
   imageUrl: '',
   hasPlusOne: false,
   plusOneName: '',
+  isParticipatingInCookieSwap: false,
+  cookieSwapDescription: '',
 };
 
 const INITIAL_DISHES: Dish[] = [
@@ -82,12 +84,14 @@ const INITIAL_POTLUCKS: Potluck[] = [
         date: 'November 23, 2025',
         time: '5:00 PM',
         dishCap: 40,
+        enableCookieSwap: true,
     },
     {
         id: 2,
         name: 'Soupvember 2025',
         dishes: SOUPVEMBER_DISHES,
         dishCap: 25,
+        enableCookieSwap: false,
     }
 ];
 
@@ -99,7 +103,10 @@ const App: React.FC = () => {
   // App State
   const [potlucks, setPotlucks] = useState<Potluck[]>(INITIAL_POTLUCKS);
   const [selectedPotluckId, setSelectedPotluckId] = useState<number>(INITIAL_POTLUCKS[0].id);
-  const [newDish, setNewDish] = useState(initialFormState);
+  
+  // Form State - now an array to support multiple dishes
+  const [dishForms, setDishForms] = useState<typeof initialFormState[]>([initialFormState]);
+  
   const [error, setError] = useState<string | null>(null);
   const [editingDishId, setEditingDishId] = useState<number | null>(null);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
@@ -142,27 +149,47 @@ const App: React.FC = () => {
   // Only consider full if cap is defined and we reached it
   const isFull = dishCap !== undefined && totalAttendees >= dishCap;
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (index: number, e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const target = e.target;
     const name = target.name;
     const value = target.type === 'checkbox' ? (target as HTMLInputElement).checked : target.value;
-    setNewDish(prev => ({ ...prev, [name]: value }));
+    
+    setDishForms(prev => {
+        const newForms = [...prev];
+        newForms[index] = { ...newForms[index], [name]: value };
+        return newForms;
+    });
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setNewDish(prev => ({ ...prev, imageUrl: reader.result as string }));
+          setDishForms(prev => {
+              const newForms = [...prev];
+              newForms[index] = { ...newForms[index], imageUrl: reader.result as string };
+              return newForms;
+          });
       };
       reader.readAsDataURL(file);
     }
   };
 
+  const handleAddForm = () => {
+      setDishForms(prev => [...prev, { ...initialFormState }]);
+      setError(null);
+  };
+
+  const handleRemoveForm = (index: number) => {
+      if (dishForms.length <= 1) return;
+      setDishForms(prev => prev.filter((_, i) => i !== index));
+      setError(null);
+  };
+
   const handleStartEdit = (dish: Dish) => {
     setEditingDishId(dish.id);
-    setNewDish({
+    setDishForms([{
       dishName: dish.dishName,
       allergens: dish.allergens,
       extras: dish.extras || '',
@@ -170,14 +197,16 @@ const App: React.FC = () => {
       imageUrl: dish.imageUrl || '',
       hasPlusOne: dish.hasPlusOne || false,
       plusOneName: dish.plusOneName || '',
-    });
+      isParticipatingInCookieSwap: dish.isParticipatingInCookieSwap || false,
+      cookieSwapDescription: dish.cookieSwapDescription || '',
+    }]);
     setError(null);
     formRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const handleCancelEdit = () => {
     setEditingDishId(null);
-    setNewDish(initialFormState);
+    setDishForms([initialFormState]);
     setError(null);
   };
 
@@ -198,19 +227,30 @@ const App: React.FC = () => {
     
     if (!currentUser) return;
 
-    if (!newDish.dishName.trim()) {
-      setError('Dish name is required.');
-      return;
-    }
+    // Validate all forms
+    for (let i = 0; i < dishForms.length; i++) {
+        const form = dishForms[i];
+        const prefix = dishForms.length > 1 ? `Dish #${i + 1}: ` : '';
 
-    if (!newDish.allergens.trim()) {
-      setError('Allergens field is required. Please write "N/A" if no major allergens are present.');
-      return;
-    }
+        if (!form.dishName.trim()) {
+            setError(`${prefix}Dish name is required.`);
+            return;
+        }
 
-    if (newDish.hasPlusOne && !newDish.plusOneName.trim()) {
-        setError('Please enter the name of your plus one.');
-        return;
+        if (!form.allergens.trim()) {
+            setError(`${prefix}Allergens field is required. Please write "N/A" if no major allergens are present.`);
+            return;
+        }
+
+        if (form.hasPlusOne && !form.plusOneName.trim()) {
+            setError(`${prefix}Please enter the name of your plus one.`);
+            return;
+        }
+
+        if (form.isParticipatingInCookieSwap && !form.cookieSwapDescription.trim()) {
+            setError(`${prefix}Please describe the cookies you are bringing for the swap.`);
+            return;
+        }
     }
 
     // Calculate current attendees excluding the dish being edited (if any)
@@ -219,10 +259,10 @@ const App: React.FC = () => {
         return acc + 1 + (dish.hasPlusOne ? 1 : 0);
     }, 0);
 
-    const newContribution = 1 + (newDish.hasPlusOne ? 1 : 0);
+    const newContribution = dishForms.reduce((acc, form) => acc + 1 + (form.hasPlusOne ? 1 : 0), 0);
 
     if (dishCap !== undefined && (currentAttendees + newContribution) > dishCap) {
-        setError(`This would exceed the capacity limit of ${dishCap} people.`);
+        setError(`This would exceed the capacity limit of ${dishCap} people. You are trying to add ${newContribution} spots.`);
         return;
     }
 
@@ -231,30 +271,29 @@ const App: React.FC = () => {
             return p;
         }
 
-        let updatedDishes;
+        let updatedDishes = [...p.dishes];
+        
         if (editingDishId !== null) {
-            // Updating existing dish
-            updatedDishes = p.dishes.map(dish => 
+            // Updating existing dish (single)
+            updatedDishes = updatedDishes.map(dish => 
                 dish.id === editingDishId 
-                  ? { ...dish, ...newDish } // Keep original personName and userId
+                  ? { ...dish, ...dishForms[0] } // Keep original personName and userId
                   : dish
             );
         } else {
-            // Creating new dish
-            updatedDishes = [
-                ...p.dishes,
-                { 
-                  id: Date.now(), 
-                  personName: currentUser.name, // Auto-fill name
-                  userId: currentUser.id,     // Auto-fill user ID
-                  ...newDish 
-                }
-            ];
+            // Creating new dishes (possibly multiple)
+            const newDishes = dishForms.map((form, index) => ({
+                id: Date.now() + index, // Ensure slightly different timestamps
+                personName: currentUser.name, // Auto-fill name
+                userId: currentUser.id,     // Auto-fill user ID
+                ...form
+            }));
+            updatedDishes = [...updatedDishes, ...newDishes];
         }
         return { ...p, dishes: updatedDishes };
     }));
     
-    handleCancelEdit();
+    handleCancelEdit(); // Resets everything including form state
   };
   
   const handleAdminClick = () => {
@@ -351,7 +390,7 @@ const App: React.FC = () => {
           <div ref={formRef} className="bg-white p-6 sm:p-8 rounded-xl shadow-md mb-8 scroll-mt-4">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-semibold text-gray-700">
-                {editingDishId ? 'Edit Dish' : 'Add a New Dish'}
+                {editingDishId ? 'Edit Dish' : 'Add Dish(es)'}
                 </h2>
                 <div className="text-sm bg-green-50 text-green-800 px-3 py-1 rounded-full">
                     Posting as: <strong>{currentUser.name}</strong>
@@ -383,134 +422,202 @@ const App: React.FC = () => {
             )}
             
             <fieldset disabled={isFull && !editingDishId} className="group disabled:opacity-60">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                    <label htmlFor="dishName" className="block text-sm font-medium text-gray-600 mb-1">Dish Name</label>
-                    <input
-                        type="text"
-                        id="dishName"
-                        name="dishName"
-                        value={newDish.dishName}
-                        onChange={handleInputChange}
-                        placeholder="e.g., Spicy Black Bean Burgers"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    />
-                    </div>
-                    <div>
-                        <label htmlFor="category" className="block text-sm font-medium text-gray-600 mb-1">Category</label>
-                        <select
-                        id="category"
-                        name="category"
-                        value={newDish.category}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white"
-                        >
-                        {CATEGORIES.map(category => (
-                            <option key={category} value={category}>{category}</option>
-                        ))}
-                        </select>
-                    </div>
-                </div>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                
+                {dishForms.map((formData, index) => (
+                    <div key={index} className={dishForms.length > 1 ? "p-4 border border-gray-200 rounded-lg bg-gray-50/50 shadow-sm relative animate-fadeIn" : ""}>
+                        {dishForms.length > 1 && (
+                            <div className="flex justify-between items-center mb-4 border-b border-gray-200 pb-2">
+                                <h3 className="font-medium text-gray-700">Dish #{index + 1}</h3>
+                                <button 
+                                    type="button" 
+                                    onClick={() => handleRemoveForm(index)}
+                                    className="text-red-500 text-sm hover:text-red-700 flex items-center gap-1 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                                    title="Remove this dish"
+                                >
+                                    <span className="text-lg leading-none">&times;</span> Remove
+                                </button>
+                            </div>
+                        )}
 
-                <div className="border-t border-b border-gray-100 py-3">
-                    <div className="flex items-center gap-2 mb-2">
-                        <input
-                            type="checkbox"
-                            id="hasPlusOne"
-                            name="hasPlusOne"
-                            checked={newDish.hasPlusOne}
-                            onChange={handleInputChange}
-                            className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
-                        />
-                        <label htmlFor="hasPlusOne" className="text-sm font-medium text-gray-700 cursor-pointer">
-                            Bringing a +1?
-                        </label>
-                    </div>
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                <label htmlFor={`dishName-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Dish Name</label>
+                                <input
+                                    type="text"
+                                    id={`dishName-${index}`}
+                                    name="dishName"
+                                    value={formData.dishName}
+                                    onChange={(e) => handleInputChange(index, e)}
+                                    placeholder="e.g., Spicy Black Bean Burgers"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                />
+                                </div>
+                                <div>
+                                    <label htmlFor={`category-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Category</label>
+                                    <select
+                                    id={`category-${index}`}
+                                    name="category"
+                                    value={formData.category}
+                                    onChange={(e) => handleInputChange(index, e)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white"
+                                    >
+                                    {CATEGORIES.map(category => (
+                                        <option key={category} value={category}>{category}</option>
+                                    ))}
+                                    </select>
+                                </div>
+                            </div>
 
-                    {newDish.hasPlusOne && (
-                        <div className="ml-6 animate-fadeIn">
-                            <label htmlFor="plusOneName" className="block text-sm font-medium text-gray-600 mb-1">Plus One Name</label>
-                            <input
+                            {index === 0 && (
+                            <div className="border-t border-b border-gray-100 py-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <input
+                                        type="checkbox"
+                                        id={`hasPlusOne-${index}`}
+                                        name="hasPlusOne"
+                                        checked={formData.hasPlusOne}
+                                        onChange={(e) => handleInputChange(index, e)}
+                                        className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
+                                    />
+                                    <label htmlFor={`hasPlusOne-${index}`} className="text-sm font-medium text-gray-700 cursor-pointer">
+                                        Bringing a +1?
+                                    </label>
+                                </div>
+
+                                {formData.hasPlusOne && (
+                                    <div className="ml-6 animate-fadeIn">
+                                        <label htmlFor={`plusOneName-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Plus One Name</label>
+                                        <input
+                                            type="text"
+                                            id={`plusOneName-${index}`}
+                                            name="plusOneName"
+                                            value={formData.plusOneName}
+                                            onChange={(e) => handleInputChange(index, e)}
+                                            placeholder="e.g., Partner's Name"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                            )}
+
+                            {activePotluck?.enableCookieSwap && index === 0 && (
+                                <div className="border-t border-b border-gray-100 py-3 bg-yellow-50/50 rounded-md px-2 my-2 border border-yellow-100">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <input
+                                            type="checkbox"
+                                            id={`isParticipatingInCookieSwap-${index}`}
+                                            name="isParticipatingInCookieSwap"
+                                            checked={formData.isParticipatingInCookieSwap}
+                                            onChange={(e) => handleInputChange(index, e)}
+                                            className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 rounded cursor-pointer"
+                                        />
+                                        <label htmlFor={`isParticipatingInCookieSwap-${index}`} className="text-sm font-bold text-yellow-800 cursor-pointer">
+                                            Participating in the CBC Cookie Swap? 🍪
+                                        </label>
+                                    </div>
+
+                                    {formData.isParticipatingInCookieSwap && (
+                                        <div className="ml-6 animate-fadeIn">
+                                            <label htmlFor={`cookieSwapDescription-${index}`} className="block text-sm font-medium text-gray-600 mb-1">What type of cookies are you bringing?</label>
+                                            <input
+                                                type="text"
+                                                id={`cookieSwapDescription-${index}`}
+                                                name="cookieSwapDescription"
+                                                value={formData.cookieSwapDescription}
+                                                onChange={(e) => handleInputChange(index, e)}
+                                                placeholder="e.g., Gingerbread Men"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div>
+                                <label htmlFor={`allergens-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Major Allergens</label>
+                                <input
                                 type="text"
-                                id="plusOneName"
-                                name="plusOneName"
-                                value={newDish.plusOneName}
-                                onChange={handleInputChange}
-                                placeholder="e.g., Partner's Name"
+                                id={`allergens-${index}`}
+                                name="allergens"
+                                value={formData.allergens}
+                                onChange={(e) => handleInputChange(index, e)}
+                                placeholder="e.g., Nuts, Soy"
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                            />
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Write "N/A" if no major allergens present.</p>
+                            </div>
+
+                            <div>
+                                <label htmlFor={`extras-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Any Extras (optional)</label>
+                                <input
+                                type="text"
+                                id={`extras-${index}`}
+                                name="extras"
+                                value={formData.extras || ''}
+                                onChange={(e) => handleInputChange(index, e)}
+                                placeholder="e.g., Serving spoons, extension cord"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                />
+                            </div>
+
+                            <div>
+                                <label htmlFor={`imageUrl-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Dish Image (optional)</label>
+                                <input
+                                type="file"
+                                id={`imageUrl-${index}`}
+                                name="imageUrl"
+                                accept="image/*"
+                                onChange={(e) => handleImageChange(index, e)}
+                                className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                                />
+                                {formData.imageUrl && (
+                                <div className="mt-4">
+                                    <img src={formData.imageUrl} alt="Preview" className="w-32 h-32 object-cover rounded-md border border-gray-200" />
+                                </div>
+                                )}
+                            </div>
                         </div>
-                    )}
-                </div>
-
-                <div>
-                    <label htmlFor="allergens" className="block text-sm font-medium text-gray-600 mb-1">Major Allergens</label>
-                    <input
-                    type="text"
-                    id="allergens"
-                    name="allergens"
-                    value={newDish.allergens}
-                    onChange={handleInputChange}
-                    placeholder="e.g., Nuts, Soy"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Write "N/A" if no major allergens present.</p>
-                </div>
-
-                <div>
-                    <label htmlFor="extras" className="block text-sm font-medium text-gray-600 mb-1">Any Extras (optional)</label>
-                    <input
-                    type="text"
-                    id="extras"
-                    name="extras"
-                    value={newDish.extras || ''}
-                    onChange={handleInputChange}
-                    placeholder="e.g., Serving spoons, extension cord"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    />
-                </div>
-
-                <div>
-                    <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-600 mb-1">Dish Image (optional)</label>
-                    <input
-                    type="file"
-                    id="imageUrl"
-                    name="imageUrl"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                    />
-                    {newDish.imageUrl && (
-                    <div className="mt-4">
-                        <img src={newDish.imageUrl} alt="Preview" className="w-32 h-32 object-cover rounded-md border border-gray-200" />
                     </div>
-                    )}
-                </div>
+                ))}
 
                 <p className="text-sm text-red-600 font-medium">
                     ALLERGENS (please share if your dish contains the following): hemp seeds, gluten, peanuts, other nuts, etc
                 </p>
 
-                {error && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</p>}
+                {error && <p className="text-sm text-red-600 bg-red-50 p-2 rounded border border-red-200">{error}</p>}
 
-                <div className="flex justify-end items-center gap-4 pt-2">
-                    {editingDishId && (
-                    <button type="button" onClick={handleCancelEdit} className="py-2 px-6 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
-                        Cancel
-                    </button>
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-2">
+                     {!editingDishId && !isFull && (
+                        <button 
+                            type="button"
+                            onClick={handleAddForm}
+                            className="text-green-600 font-medium hover:text-green-800 flex items-center gap-1 text-sm py-2 px-4 rounded-md border border-green-200 bg-green-50 hover:bg-green-100 transition-colors w-full sm:w-auto justify-center"
+                        >
+                            <span className="text-lg leading-none font-bold">+</span> Add Another Dish
+                        </button>
                     )}
-                    <button 
-                        type="submit" 
-                        disabled={isFull && !editingDishId}
-                        className={`inline-flex justify-center py-2 px-6 border border-transparent shadow-sm text-sm font-medium rounded-md text-white transition-colors
-                            ${isFull && !editingDishId 
-                                ? 'bg-gray-400 cursor-not-allowed' 
-                                : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
-                            }`}
-                    >
-                    {editingDishId ? 'Update Dish' : 'Add Dish'}
-                    </button>
+                    
+                    <div className="flex gap-4 w-full sm:w-auto justify-end ml-auto">
+                        {editingDishId && (
+                        <button type="button" onClick={handleCancelEdit} className="py-2 px-6 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
+                            Cancel
+                        </button>
+                        )}
+                        <button 
+                            type="submit" 
+                            disabled={isFull && !editingDishId}
+                            className={`inline-flex justify-center py-2 px-6 border border-transparent shadow-sm text-sm font-medium rounded-md text-white transition-colors w-full sm:w-auto
+                                ${isFull && !editingDishId 
+                                    ? 'bg-gray-400 cursor-not-allowed' 
+                                    : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+                                }`}
+                        >
+                        {editingDishId ? 'Update Dish' : `Add ${dishForms.length > 1 ? 'Dishes' : 'Dish'}`}
+                        </button>
+                    </div>
                 </div>
                 </form>
             </fieldset>

@@ -27,6 +27,8 @@ export interface Dish {
   userId?: string; // ID of the user who created the dish
   hasPlusOne?: boolean;
   plusOneName?: string;
+  isParticipatingInCookieSwap?: boolean;
+  cookieSwapDescription?: string;
 }
 
 export interface Potluck {
@@ -39,4 +41,5 @@ export interface Potluck {
   date?: string;
   time?: string;
   dishCap?: number;
+  enableCookieSwap?: boolean;
 }

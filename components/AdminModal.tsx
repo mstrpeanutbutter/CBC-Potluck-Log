@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Potluck } from '../types';
 
@@ -19,6 +20,7 @@ interface PotluckFormState {
     date: string;
     time: string;
     dishCap: string | number;
+    enableCookieSwap: boolean;
 }
 
 const initialPotluckFormState: PotluckFormState = {
@@ -29,6 +31,7 @@ const initialPotluckFormState: PotluckFormState = {
     date: '',
     time: '',
     dishCap: '',
+    enableCookieSwap: false,
 };
 
 const PotluckFormFields: React.FC<{
@@ -64,6 +67,19 @@ const PotluckFormFields: React.FC<{
             <label htmlFor="dishCap" className="block text-sm font-medium text-gray-600 mb-1">Max Dishes (Optional Cap)</label>
             <input type="number" id="dishCap" name="dishCap" value={data.dishCap} onChange={onChange} min="1" placeholder="e.g., 25" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
         </div>
+        <div className="flex items-center pt-2 border-t border-gray-100 mt-2">
+             <input
+                type="checkbox"
+                id="enableCookieSwap"
+                name="enableCookieSwap"
+                checked={data.enableCookieSwap}
+                onChange={onChange}
+                className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
+            />
+            <label htmlFor="enableCookieSwap" className="ml-2 block text-sm text-gray-700 cursor-pointer font-medium">
+                Enable CBC Cookie Swap Feature
+            </label>
+        </div>
     </div>
 );
 
@@ -80,7 +96,11 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose, potlucks, onAd
   }
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
+    const target = e.target;
+    const name = target.name;
+    // Handle checkbox vs text input
+    const value = target.type === 'checkbox' ? (target as HTMLInputElement).checked : target.value;
+    
     if (view === 'add') {
          setPotluckForm(prev => ({ ...prev, [name]: value }));
     } else if (view === 'editForm' && editingFormState) {
@@ -136,7 +156,8 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose, potlucks, onAd
         neighborhood: potluck.neighborhood || '',
         date: potluck.date || '',
         time: potluck.time || '',
-        dishCap: potluck.dishCap === undefined ? '' : potluck.dishCap
+        dishCap: potluck.dishCap === undefined ? '' : potluck.dishCap,
+        enableCookieSwap: potluck.enableCookieSwap || false,
     });
     setView('editForm');
   };
