@@ -50,7 +50,7 @@ const DishItem: React.FC<DishItemProps> = ({ dish, currentUserId, isAdmin, onEdi
           )}
           {dish.isParticipatingInCookieSwap && (
             <p className="text-sm text-yellow-700 mt-1 bg-yellow-50 inline-block px-2 py-0.5 rounded border border-yellow-100">
-                🍪 <span className="font-semibold">Cookie Swap:</span> {dish.cookieSwapDescription || 'Participating'}
+                🍪 <span className="font-semibold">Holiday Cookie Swap:</span> {dish.cookieSwapDescription || 'Participating'}
             </p>
           )}
         </div>

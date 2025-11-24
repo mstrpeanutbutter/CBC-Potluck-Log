@@ -145,6 +145,13 @@ const App: React.FC = () => {
   
   // Calculate total attendees based on dish creator + plus ones
   const totalAttendees = activeDishes.reduce((acc, dish) => acc + 1 + (dish.hasPlusOne ? 1 : 0), 0);
+
+  // Calculate unique participants in cookie swap
+  const cookieSwapParticipants = new Set(
+    activeDishes
+      .filter(d => d.isParticipatingInCookieSwap)
+      .map(d => d.userId || d.personName)
+  ).size;
   
   // Only consider full if cap is defined and we reached it
   const isFull = dishCap !== undefined && totalAttendees >= dishCap;
@@ -382,6 +389,11 @@ const App: React.FC = () => {
                 {activePotluck.neighborhood && <p><strong>Neighborhood:</strong> {activePotluck.neighborhood}</p>}
                 {activePotluck.date && <p><strong>Date:</strong> {activePotluck.date}</p>}
                 {activePotluck.time && <p><strong>Time:</strong> {activePotluck.time}</p>}
+                {activePotluck.enableCookieSwap && (
+                    <p className="font-semibold text-yellow-700 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200 mt-2 sm:mt-0">
+                        🍪 {cookieSwapParticipants} participating in Holiday Cookie Swap
+                    </p>
+                )}
             </div>
           )}
         </header>
@@ -515,7 +527,7 @@ const App: React.FC = () => {
                                             className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 rounded cursor-pointer"
                                         />
                                         <label htmlFor={`isParticipatingInCookieSwap-${index}`} className="text-sm font-bold text-yellow-800 cursor-pointer">
-                                            Participating in the CBC Cookie Swap? 🍪
+                                            Participating in the CBC Holiday Cookie Swap? 🍪
                                         </label>
                                     </div>
 
