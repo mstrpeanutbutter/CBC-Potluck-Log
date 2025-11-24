@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Dish } from '../types';
 import { CATEGORY_COLORS } from '../constants';
@@ -31,7 +32,12 @@ const DishItem: React.FC<DishItemProps> = ({ dish, currentUserId, isAdmin, onEdi
       <div className="flex flex-col justify-between flex-grow">
         <div>
           <h3 className="text-lg font-bold text-gray-800">{dish.dishName}</h3>
-          <p className="text-sm text-gray-500">Brought by: <span className="font-medium text-gray-600">{dish.personName}</span></p>
+          <p className="text-sm text-gray-500">
+              Brought by: <span className="font-medium text-gray-600">{dish.personName}</span>
+              {dish.hasPlusOne && (
+                  <span className="font-medium text-green-600"> + {dish.plusOneName || 'Plus One'}</span>
+              )}
+          </p>
           {dish.allergens && (
             <p className="text-sm text-yellow-700 mt-1">
               <span className="font-semibold">Allergens:</span> {dish.allergens}

@@ -15,6 +15,8 @@ const initialFormState = {
   extras: '',
   category: Category.MAIN,
   imageUrl: '',
+  hasPlusOne: false,
+  plusOneName: '',
 };
 
 const INITIAL_DISHES: Dish[] = [
@@ -133,11 +135,17 @@ const App: React.FC = () => {
   const activePotluck = potlucks.find(p => p.id === selectedPotluckId);
   const activeDishes = activePotluck ? activePotluck.dishes : [];
   const dishCap = activePotluck?.dishCap;
+  
+  // Calculate total attendees based on dish creator + plus ones
+  const totalAttendees = activeDishes.reduce((acc, dish) => acc + 1 + (dish.hasPlusOne ? 1 : 0), 0);
+  
   // Only consider full if cap is defined and we reached it
-  const isFull = dishCap !== undefined && activeDishes.length >= dishCap;
+  const isFull = dishCap !== undefined && totalAttendees >= dishCap;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
+    const target = e.target;
+    const name = target.name;
+    const value = target.type === 'checkbox' ? (target as HTMLInputElement).checked : target.value;
     setNewDish(prev => ({ ...prev, [name]: value }));
   };
 
@@ -160,6 +168,8 @@ const App: React.FC = () => {
       extras: dish.extras || '',
       category: dish.category,
       imageUrl: dish.imageUrl || '',
+      hasPlusOne: dish.hasPlusOne || false,
+      plusOneName: dish.plusOneName || '',
     });
     setError(null);
     formRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -198,9 +208,21 @@ const App: React.FC = () => {
       return;
     }
 
-    // Prevent adding if full and not editing an existing dish
-    if (isFull && editingDishId === null) {
-        setError('This potluck has reached its maximum capacity. No new dishes can be added.');
+    if (newDish.hasPlusOne && !newDish.plusOneName.trim()) {
+        setError('Please enter the name of your plus one.');
+        return;
+    }
+
+    // Calculate current attendees excluding the dish being edited (if any)
+    const currentAttendees = activeDishes.reduce((acc, dish) => {
+        if (dish.id === editingDishId) return acc;
+        return acc + 1 + (dish.hasPlusOne ? 1 : 0);
+    }, 0);
+
+    const newContribution = 1 + (newDish.hasPlusOne ? 1 : 0);
+
+    if (dishCap !== undefined && (currentAttendees + newContribution) > dishCap) {
+        setError(`This would exceed the capacity limit of ${dishCap} people.`);
         return;
     }
 
@@ -339,17 +361,17 @@ const App: React.FC = () => {
             {dishCap && (
                 <div className="mb-6">
                   <div className="flex justify-between text-sm font-medium text-gray-600 mb-1">
-                    <span>Potluck Capacity</span>
+                    <span>Potluck Capacity (People)</span>
                     <span className={isFull ? 'text-red-600 font-bold' : 'text-green-600'}>
-                      {activeDishes.length} / {dishCap} filled
+                      {totalAttendees} / {dishCap} filled
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
                     <div 
                       className={`h-2.5 transition-all duration-500 ${
-                        isFull ? 'bg-red-500' : activeDishes.length >= dishCap * 0.8 ? 'bg-yellow-400' : 'bg-green-500'
+                        isFull ? 'bg-red-500' : totalAttendees >= dishCap * 0.8 ? 'bg-yellow-400' : 'bg-green-500'
                       }`} 
-                      style={{ width: `${Math.min(100, (activeDishes.length / dishCap) * 100)}%` }}
+                      style={{ width: `${Math.min(100, (totalAttendees / dishCap) * 100)}%` }}
                     ></div>
                   </div>
                   {isFull && !editingDishId && (
@@ -389,6 +411,37 @@ const App: React.FC = () => {
                         ))}
                         </select>
                     </div>
+                </div>
+
+                <div className="border-t border-b border-gray-100 py-3">
+                    <div className="flex items-center gap-2 mb-2">
+                        <input
+                            type="checkbox"
+                            id="hasPlusOne"
+                            name="hasPlusOne"
+                            checked={newDish.hasPlusOne}
+                            onChange={handleInputChange}
+                            className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
+                        />
+                        <label htmlFor="hasPlusOne" className="text-sm font-medium text-gray-700 cursor-pointer">
+                            Bringing a +1?
+                        </label>
+                    </div>
+
+                    {newDish.hasPlusOne && (
+                        <div className="ml-6 animate-fadeIn">
+                            <label htmlFor="plusOneName" className="block text-sm font-medium text-gray-600 mb-1">Plus One Name</label>
+                            <input
+                                type="text"
+                                id="plusOneName"
+                                name="plusOneName"
+                                value={newDish.plusOneName}
+                                onChange={handleInputChange}
+                                placeholder="e.g., Partner's Name"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                            />
+                        </div>
+                    )}
                 </div>
 
                 <div>
@@ -439,7 +492,7 @@ const App: React.FC = () => {
                     ALLERGENS (please share if your dish contains the following): hemp seeds, gluten, peanuts, other nuts, etc
                 </p>
 
-                {error && <p className="text-sm text-red-600">{error}</p>}
+                {error && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</p>}
 
                 <div className="flex justify-end items-center gap-4 pt-2">
                     {editingDishId && (

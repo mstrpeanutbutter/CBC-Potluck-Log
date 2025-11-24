@@ -25,6 +25,8 @@ export interface Dish {
   imageUrl?: string;
   extras?: string;
   userId?: string; // ID of the user who created the dish
+  hasPlusOne?: boolean;
+  plusOneName?: string;
 }
 
 export interface Potluck {
