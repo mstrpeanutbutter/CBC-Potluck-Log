@@ -29,12 +29,26 @@ export interface Dish {
   plusOneName?: string;
   isParticipatingInCookieSwap?: boolean;
   cookieSwapDescription?: string;
+  userDietaryRestrictions?: string;
+  isDietaryRestrictionSerious?: boolean;
+}
+
+export interface WaitlistEntry {
+  userId: string;
+  name: string;
+  timestamp: number;
+}
+
+export interface FirstInLineEntry extends WaitlistEntry {
+  expiryTimestamp: number;
 }
 
 export interface Potluck {
   id: number;
   name: string;
   dishes: Dish[];
+  waitlist?: WaitlistEntry[];
+  firstInLine?: FirstInLineEntry | null;
   bookTheme?: string;
   host?: string;
   neighborhood?: string;
@@ -42,4 +56,7 @@ export interface Potluck {
   time?: string;
   dishCap?: number;
   enableCookieSwap?: boolean;
+  buyBookLink?: string;
+  authorWebsiteLink?: string;
+  cplLink?: string;
 }

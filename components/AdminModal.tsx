@@ -11,7 +11,6 @@ interface AdminModalProps {
   onDelete: (id: number) => void;
 }
 
-// Helper interface for form state which may handle numbers as empty strings during input
 interface PotluckFormState {
     name: string;
     bookTheme: string;
@@ -21,6 +20,9 @@ interface PotluckFormState {
     time: string;
     dishCap: string | number;
     enableCookieSwap: boolean;
+    buyBookLink: string;
+    authorWebsiteLink: string;
+    cplLink: string;
 }
 
 const initialPotluckFormState: PotluckFormState = {
@@ -32,20 +34,23 @@ const initialPotluckFormState: PotluckFormState = {
     time: '',
     dishCap: '',
     enableCookieSwap: false,
+    buyBookLink: '',
+    authorWebsiteLink: '',
+    cplLink: '',
 };
 
 const PotluckFormFields: React.FC<{
     data: PotluckFormState;
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }> = ({ data, onChange }) => (
-    <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+    <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
         <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-600 mb-1">Potluck Name*</label>
             <input id="name" name="name" value={data.name} onChange={onChange} required placeholder="e.g., Summer Picnic 2026" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500" autoFocus />
         </div>
         <div>
             <label htmlFor="bookTheme" className="block text-sm font-medium text-gray-600 mb-1">Book/Theme</label>
-            <input id="bookTheme" name="bookTheme" value={data.bookTheme || ''} onChange={onChange} placeholder="e.g., Veganomicon" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+            <input id="bookTheme" name="bookTheme" value={data.bookTheme || ''} onChange={onChange} placeholder="e.g., Isa Does It" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
         </div>
         <div>
             <label htmlFor="host" className="block text-sm font-medium text-gray-600 mb-1">Host</label>
@@ -53,19 +58,38 @@ const PotluckFormFields: React.FC<{
         </div>
         <div>
             <label htmlFor="neighborhood" className="block text-sm font-medium text-gray-600 mb-1">Neighborhood</label>
-            <input id="neighborhood" name="neighborhood" value={data.neighborhood || ''} onChange={onChange} placeholder="e.g., Lincoln Park" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+            <input id="neighborhood" name="neighborhood" value={data.neighborhood || ''} onChange={onChange} placeholder="e.g., Logan Square" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+            <div>
+                <label htmlFor="date" className="block text-sm font-medium text-gray-600 mb-1">Date</label>
+                <input id="date" name="date" value={data.date || ''} onChange={onChange} placeholder="e.g., July 4" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+            </div>
+            <div>
+                <label htmlFor="time" className="block text-sm font-medium text-gray-600 mb-1">Time</label>
+                <input id="time" name="time" value={data.time || ''} onChange={onChange} placeholder="e.g., 6:00 PM" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+            </div>
         </div>
         <div>
-            <label htmlFor="date" className="block text-sm font-medium text-gray-600 mb-1">Date</label>
-            <input id="date" name="date" value={data.date || ''} onChange={onChange} placeholder="e.g., July 4, 2026" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
-        </div>
-        <div>
-            <label htmlFor="time" className="block text-sm font-medium text-gray-600 mb-1">Time</label>
-            <input id="time" name="time" value={data.time || ''} onChange={onChange} placeholder="e.g., 6:00 PM" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
-        </div>
-        <div>
-            <label htmlFor="dishCap" className="block text-sm font-medium text-gray-600 mb-1">Max Dishes (Optional Cap)</label>
+            <label htmlFor="dishCap" className="block text-sm font-medium text-gray-600 mb-1">Max People (Optional Cap)</label>
             <input type="number" id="dishCap" name="dishCap" value={data.dishCap} onChange={onChange} min="1" placeholder="e.g., 25" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+        </div>
+        <div className="pt-2 border-t border-gray-100">
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Book & Author Links</h4>
+            <div className="space-y-3">
+                <div>
+                    <label htmlFor="buyBookLink" className="block text-sm font-medium text-gray-600 mb-1">Buy Book Link</label>
+                    <input id="buyBookLink" name="buyBookLink" value={data.buyBookLink || ''} onChange={onChange} placeholder="https://..." className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 text-sm" />
+                </div>
+                <div>
+                    <label htmlFor="authorWebsiteLink" className="block text-sm font-medium text-gray-600 mb-1">Author Website Link</label>
+                    <input id="authorWebsiteLink" name="authorWebsiteLink" value={data.authorWebsiteLink || ''} onChange={onChange} placeholder="https://..." className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 text-sm" />
+                </div>
+                <div>
+                    <label htmlFor="cplLink" className="block text-sm font-medium text-gray-600 mb-1">Chicago Public Library Link</label>
+                    <input id="cplLink" name="cplLink" value={data.cplLink || ''} onChange={onChange} placeholder="https://chipublib..." className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 text-sm" />
+                </div>
+            </div>
         </div>
         <div className="flex items-center pt-2 border-t border-gray-100 mt-2">
              <input
@@ -77,7 +101,7 @@ const PotluckFormFields: React.FC<{
                 className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
             />
             <label htmlFor="enableCookieSwap" className="ml-2 block text-sm text-gray-700 cursor-pointer font-medium">
-                Enable CBC Holiday Cookie Swap Feature
+                Enable CBC Holiday Cookie Swap Feature 🍪
             </label>
         </div>
     </div>
@@ -87,18 +111,14 @@ const PotluckFormFields: React.FC<{
 const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose, potlucks, onAdd, onEdit, onDelete }) => {
   const [view, setView] = useState<'menu' | 'add' | 'editList' | 'editForm' | 'delete'>('menu');
   const [potluckForm, setPotluckForm] = useState<PotluckFormState>(initialPotluckFormState);
-  // We use a separate state for editing to allow the flexible string/number type for inputs
   const [editingFormState, setEditingFormState] = useState<PotluckFormState | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  if (!isOpen) {
-    return null;
-  }
+  if (!isOpen) return null;
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const target = e.target;
     const name = target.name;
-    // Handle checkbox vs text input
     const value = target.type === 'checkbox' ? (target as HTMLInputElement).checked : target.value;
     
     if (view === 'add') {
@@ -122,28 +142,21 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose, potlucks, onAd
   };
 
   const handleDelete = (id: number) => {
-    if (potlucks.length <= 1) {
-        alert("You can't delete the last potluck!");
-        return;
-    }
-    if (window.confirm('Are you sure you want to delete this potluck? This action cannot be undone.')) {
-      onDelete(id);
-    }
+    if (potlucks.length <= 1) { alert("You can't delete the last potluck!"); return; }
+    if (window.confirm('Are you sure you want to delete this potluck?')) { onDelete(id); }
   };
   
   const handleEditSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingFormState && editingId !== null && editingFormState.name.trim()) {
-        if (window.confirm('Are you sure you want to save these changes?')) {
-            const submissionData = {
-                ...editingFormState,
-                dishCap: editingFormState.dishCap === '' ? undefined : Number(editingFormState.dishCap)
-            };
-            onEdit(editingId, submissionData);
-            setEditingFormState(null);
-            setEditingId(null);
-            setView('editList');
-        }
+        const submissionData = {
+            ...editingFormState,
+            dishCap: editingFormState.dishCap === '' ? undefined : Number(editingFormState.dishCap)
+        };
+        onEdit(editingId, submissionData);
+        setEditingFormState(null);
+        setEditingId(null);
+        setView('editList');
     }
   };
   
@@ -158,6 +171,9 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose, potlucks, onAd
         time: potluck.time || '',
         dishCap: potluck.dishCap === undefined ? '' : potluck.dishCap,
         enableCookieSwap: potluck.enableCookieSwap || false,
+        buyBookLink: potluck.buyBookLink || '',
+        authorWebsiteLink: potluck.authorWebsiteLink || '',
+        cplLink: potluck.cplLink || '',
     });
     setView('editForm');
   };
@@ -171,10 +187,9 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose, potlucks, onAd
   
   const renderMenu = () => (
     <div className="space-y-4">
-        <p className="text-gray-600">Select an action to manage your potlucks.</p>
         <button onClick={() => setView('add')} className="w-full text-left py-3 px-4 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors font-medium text-gray-700">Add a new potluck</button>
         <button onClick={() => setView('editList')} className="w-full text-left py-3 px-4 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors font-medium text-gray-700">Edit an existing potluck</button>
-        <button onClick={() => setView('delete')} className="w-full text-left py-3 px-4 bg-gray-50 hover:bg-red-100 rounded-md transition-colors font-medium text-red-700">Delete an existing potluck</button>
+        <button onClick={() => setView('delete')} className="w-full text-left py-3 px-4 bg-gray-50 hover:bg-red-50 rounded-md transition-colors font-medium text-red-700">Delete an existing potluck</button>
     </div>
   );
   
@@ -237,31 +252,26 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose, potlucks, onAd
     );
   };
 
-
   const renderContent = () => {
     switch(view) {
         case 'add': return renderAdd();
         case 'editList': return renderEditList();
         case 'editForm': return renderEditForm();
         case 'delete': return renderDelete();
-        case 'menu':
-        default:
-            return renderMenu();
+        default: return renderMenu();
     }
   }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4" aria-modal="true" role="dialog">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-        <div className="p-6 border-b border-gray-200 flex justify-between items-start">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 border-b border-gray-200 flex justify-between items-start bg-gray-50">
           <h2 className="text-2xl font-bold text-gray-800">Admin Panel</h2>
           <button onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
           </button>
         </div>
-        <div className="p-6">
-            {renderContent()}
-        </div>
+        <div className="p-6">{renderContent()}</div>
       </div>
     </div>
   );
