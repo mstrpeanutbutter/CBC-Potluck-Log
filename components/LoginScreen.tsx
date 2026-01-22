@@ -1,17 +1,37 @@
+
 import React, { useState } from 'react';
+import TagInput from './TagInput';
+import { PersonalAllergen } from '../types';
 
 interface LoginScreenProps {
-  onJoin: (name: string) => void;
+  onJoin: (name: string, allergens: PersonalAllergen[], serious: boolean) => void;
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onJoin }) => {
   const [name, setName] = useState('');
+  const [allergens, setAllergens] = useState<PersonalAllergen[]>([]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim()) {
-      onJoin(name.trim());
+      // isSerious is true if any individual allergen is serious
+      const anySerious = allergens.some(a => a.isSerious);
+      onJoin(name.trim(), allergens, anySerious);
     }
+  };
+
+  const handleAddAllergen = (tagName: string) => {
+    setAllergens([...allergens, { name: tagName, isSerious: false }]);
+  };
+
+  const handleRemoveAllergen = (tagName: string) => {
+    setAllergens(allergens.filter((a) => a.name !== tagName));
+  };
+
+  const handleToggleSerious = (tagName: string) => {
+    setAllergens(allergens.map(a => 
+      a.name === tagName ? { ...a, isSerious: !a.isSerious } : a
+    ));
   };
 
   return (
@@ -23,12 +43,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onJoin }) => {
         </div>
         <div className="p-8">
           <p className="text-gray-600 mb-6 text-center">
-            Please enter your name to join the potluck and start adding dishes.
+            Please enter your name and any personal dietary restrictions to get started.
           </p>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="loginName" className="block text-sm font-medium text-gray-700 mb-1">
-                Your Name
+                Your Name*
               </label>
               <input
                 type="text"
@@ -41,6 +61,21 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onJoin }) => {
                 autoFocus
               />
             </div>
+
+            <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-lg">
+                <label className="block text-sm font-bold text-blue-800 mb-3">
+                    Your Allergies / Restrictions
+                </label>
+                <TagInput 
+                  tags={allergens} 
+                  onAdd={handleAddAllergen} 
+                  onRemove={handleRemoveAllergen} 
+                  onToggleSerious={handleToggleSerious}
+                  placeholder="e.g. Peanuts, Gluten"
+                />
+                <p className="text-[10px] text-blue-500 mt-4 italic leading-tight">Your restrictions will be automatically attached to any dishes you bring.</p>
+            </div>
+
             <button
               type="submit"
               disabled={!name.trim()}

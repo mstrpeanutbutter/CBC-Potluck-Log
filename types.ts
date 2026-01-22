@@ -10,10 +10,17 @@ export enum Category {
   DINNERWARE = 'Plates/Bowls/Cups/Etc',
 }
 
+export interface PersonalAllergen {
+  name: string;
+  isSerious: boolean;
+}
+
 export interface User {
   id: string;
   name: string;
   isAdmin: boolean;
+  personalAllergens: PersonalAllergen[];
+  isDietaryRestrictionSerious: boolean; // Retained as a global flag for "any serious" or overall status
 }
 
 export interface Dish {

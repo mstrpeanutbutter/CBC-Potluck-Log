@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Dish, Category, Potluck, User, WaitlistEntry, FirstInLineEntry, ActivityLogEntry } from './types';
+import { Dish, Category, Potluck, User, WaitlistEntry, FirstInLineEntry, ActivityLogEntry, PersonalAllergen } from './types';
 import { CATEGORIES } from './constants';
 import DishList from './components/DishList';
 import PotluckMenu from './components/PotluckMenu';
@@ -12,6 +12,7 @@ import DietaryRestrictionsChart from './components/DietaryRestrictionsChart';
 import LoginScreen from './components/LoginScreen';
 import ActivityLog from './components/ActivityLog';
 import CountdownTimer from './components/CountdownTimer';
+import TagInput from './components/TagInput';
 
 const WAITLIST_MAX = 10;
 const RESERVATION_HOURS = 24;
@@ -27,8 +28,6 @@ const initialFormState = {
   plusOneName: '',
   isParticipatingInCookieSwap: false,
   cookieSwapDescription: '',
-  userDietaryRestrictions: '',
-  isDietaryRestrictionSerious: false,
 };
 
 const INITIAL_POTLUCKS: Potluck[] = [
@@ -276,6 +275,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [editingDishId, setEditingDishId] = useState<number | null>(null);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [isProfileEditing, setIsProfileEditing] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const formRef = useRef<HTMLDivElement>(null);
@@ -310,7 +310,6 @@ const App: React.FC = () => {
       setCurrentTime(now);
       setPotlucks(prev => prev.map(p => {
         if (p.firstInLine && p.firstInLine.expiryTimestamp < now) {
-          // Promote next if current expired
           const nextWaitlist = p.waitlist || [];
           const newFirst = nextWaitlist.length > 0 ? {
             ...nextWaitlist[0],
@@ -329,8 +328,14 @@ const App: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const handleJoin = (name: string) => {
-    const newUser: User = { id: Date.now().toString(), name: name, isAdmin: false };
+  const handleJoin = (name: string, allergens: PersonalAllergen[], serious: boolean) => {
+    const newUser: User = { 
+      id: Date.now().toString(), 
+      name: name, 
+      isAdmin: false, 
+      personalAllergens: allergens,
+      isDietaryRestrictionSerious: serious
+    };
     setCurrentUser(newUser);
     localStorage.setItem('cvcc_user', JSON.stringify(newUser));
   };
@@ -340,13 +345,25 @@ const App: React.FC = () => {
     localStorage.removeItem('cvcc_user');
   };
 
+  const handleUpdateUser = (updatedUser: Partial<User>) => {
+    if (currentUser) {
+        const newUser = { ...currentUser, ...updatedUser };
+        // Sync the isDietaryRestrictionSerious flag if allergens changed
+        if (updatedUser.personalAllergens) {
+            newUser.isDietaryRestrictionSerious = updatedUser.personalAllergens.some(a => a.isSerious);
+        }
+        setCurrentUser(newUser);
+        localStorage.setItem('cvcc_user', JSON.stringify(newUser));
+        addLogEntry('modified', `Updated personal profile/allergens`);
+    }
+  };
+
   const activePotluck = potlucks.find(p => p.id === selectedPotluckId);
   const activeDishes = activePotluck ? activePotluck.dishes : [];
   const activeWaitlist = activePotluck?.waitlist || [];
   const activeFirstInLine = activePotluck?.firstInLine;
   const dishCap = activePotluck?.dishCap;
 
-  // Logic to determine if potluck is locked (24 hours after start)
   const isPotluckLocked = useMemo(() => {
     if (!activePotluck?.date) return false;
     const startTime = new Date(`${activePotluck.date} ${activePotluck.time || '12:00 PM'}`).getTime();
@@ -439,8 +456,6 @@ const App: React.FC = () => {
       plusOneName: dish.plusOneName || '',
       isParticipatingInCookieSwap: dish.isParticipatingInCookieSwap || false,
       cookieSwapDescription: dish.cookieSwapDescription || '',
-      userDietaryRestrictions: dish.userDietaryRestrictions || '',
-      isDietaryRestrictionSerious: dish.isDietaryRestrictionSerious || false,
     }]);
     setError(null);
     formRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -487,13 +502,11 @@ const App: React.FC = () => {
     const currentAttendees = activeDishes.reduce((acc, dish) => dish.id === editingDishId ? acc : acc + 1 + (dish.hasPlusOne ? 1 : 0), 0);
     const newContribution = dishForms.reduce((acc, form) => acc + 1 + (form.hasPlusOne ? 1 : 0), 0);
 
-    // Capacity cap check - admins can override
     if (!currentUser.isAdmin && dishCap !== undefined && (currentAttendees + newContribution) > dishCap) {
         setError(`This would exceed the capacity limit of ${dishCap} people. You are trying to add ${newContribution} spots.`);
         return;
     }
 
-    // Logging
     if (editingDishId !== null) {
       addLogEntry('modified', `Updated dish: "${dishForms[0].dishName}"`);
     } else {
@@ -501,10 +514,14 @@ const App: React.FC = () => {
       addLogEntry('added', `Joined/Added dishes: ${dishNames}`);
     }
 
-    // Capture user-level info from the first form to apply to all dishes in this entry
+    // Build the string representation for historical display
+    const restrictionsText = currentUser.personalAllergens
+        .map(a => a.name + (a.isSerious ? ' (Serious!)' : ''))
+        .join(', ');
+
     const commonUserInfo = {
-      userDietaryRestrictions: dishForms[0].userDietaryRestrictions,
-      isDietaryRestrictionSerious: dishForms[0].isDietaryRestrictionSerious,
+      userDietaryRestrictions: restrictionsText,
+      isDietaryRestrictionSerious: currentUser.isDietaryRestrictionSerious,
       hasPlusOne: dishForms[0].hasPlusOne,
       plusOneName: dishForms[0].plusOneName,
       isParticipatingInCookieSwap: dishForms[0].isParticipatingInCookieSwap,
@@ -516,14 +533,13 @@ const App: React.FC = () => {
         let updatedDishes = [...p.dishes];
         let updatedFirstInLine = p.firstInLine;
         
-        // If firstInLine joins, clear their spot
         if (isFirstInLineUser && editingDishId === null) {
           updatedFirstInLine = null;
         }
 
         if (editingDishId !== null) {
             updatedDishes = updatedDishes.map(dish => 
-                dish.id === editingDishId ? { ...dish, ...dishForms[0] } : dish
+                dish.id === editingDishId ? { ...dish, ...dishForms[0], ...commonUserInfo } : dish
             );
         } else {
             const newDishes = dishForms.map((form, index) => ({
@@ -668,10 +684,13 @@ const App: React.FC = () => {
                     <PadlockIcon />
                 </button>
             </div>
-          <div className="absolute top-0 right-0 p-2 sm:p-0 z-10 flex items-center gap-2">
-            <span className="hidden sm:block text-sm text-gray-500">Hi, {currentUser.name}</span>
-            <button onClick={handleLogout} className="text-xs text-red-500 underline hover:text-red-700 mr-2">Logout</button>
-            <PotluckMenu potlucks={potlucks} selectedPotluckId={selectedPotluckId} onSelectPotluck={setSelectedPotluckId} />
+          <div className="absolute top-0 right-0 p-2 sm:p-0 z-10 flex flex-col items-end gap-2">
+            <div className="flex items-center gap-2">
+                <span className="hidden sm:block text-sm text-gray-500">Hi, {currentUser.name}</span>
+                <button onClick={() => setIsProfileEditing(!isProfileEditing)} className="text-xs text-blue-500 underline hover:text-blue-700">My Allergies</button>
+                <button onClick={handleLogout} className="text-xs text-red-500 underline hover:text-red-700">Logout</button>
+                <PotluckMenu potlucks={potlucks} selectedPotluckId={selectedPotluckId} onSelectPotluck={setSelectedPotluckId} />
+            </div>
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold text-green-800">Chicago Vegan Cookbook Club</h1>
           <p className="text-lg text-gray-600 mt-2 font-medium">{activePotluck?.name ?? 'Monthly Potluck'}</p>
@@ -715,6 +734,32 @@ const App: React.FC = () => {
         </header>
 
         <main>
+          {/* Profile Editor */}
+          {isProfileEditing && currentUser && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-8 shadow-sm animate-fadeIn">
+                  <h2 className="text-lg font-bold text-blue-900 mb-4">Manage My Allergies / Profile</h2>
+                  <div className="space-y-4">
+                      <TagInput 
+                        tags={currentUser.personalAllergens} 
+                        onAdd={(tagName) => handleUpdateUser({ 
+                            personalAllergens: [...currentUser.personalAllergens, { name: tagName, isSerious: false }] 
+                        })}
+                        onRemove={(tagName) => handleUpdateUser({ 
+                            personalAllergens: currentUser.personalAllergens.filter(t => t.name !== tagName) 
+                        })}
+                        onToggleSerious={(tagName) => handleUpdateUser({
+                            personalAllergens: currentUser.personalAllergens.map(t => 
+                                t.name === tagName ? { ...t, isSerious: !t.isSerious } : t
+                            )
+                        })}
+                      />
+                      <div className="flex justify-end pt-2">
+                          <button onClick={() => setIsProfileEditing(false)} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg text-sm shadow-md hover:bg-blue-700 transition-colors">Done</button>
+                      </div>
+                  </div>
+              </div>
+          )}
+
           {/* Admin Activity Log - Visible only to Admins */}
           {currentUser.isAdmin && (
             <ActivityLog entries={activityLog} />
@@ -894,109 +939,101 @@ const App: React.FC = () => {
                     <div className="text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-300">
                         <p className="text-gray-500 font-medium">This potluck is locked. No new dishes can be added.</p>
                     </div>
-                ) : dishForms.map((formData, index) => (
-                    <div key={index} className={dishForms.length > 1 ? "p-4 border border-gray-200 rounded-lg bg-gray-50/50 shadow-sm relative animate-fadeIn" : ""}>
-                        {dishForms.length > 1 && (
-                            <div className="flex justify-between items-center mb-4 border-b border-gray-200 pb-2">
-                                <h3 className="font-medium text-gray-700">Dish #{index + 1}</h3>
-                                <button type="button" onClick={() => handleRemoveForm(index)} className="text-red-500 text-sm hover:text-red-700 flex items-center gap-1 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors">
-                                    <span className="text-lg leading-none">&times;</span> Remove
-                                </button>
-                            </div>
-                        )}
-
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                <label htmlFor={`dishName-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Dish Name</label>
-                                <input type="text" id={`dishName-${index}`} name="dishName" value={formData.dishName} onChange={(e) => handleInputChange(index, e)} placeholder="e.g., Spicy Black Bean Burgers" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500" />
-                                </div>
-                                <div>
-                                    <label htmlFor={`category-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Category</label>
-                                    <select id={`category-${index}`} name="category" value={formData.category} onChange={(e) => handleInputChange(index, e)} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white" >
-                                    {CATEGORIES.map(category => (<option key={category} value={category}>{category}</option>))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            {index === 0 && (
-                            <div className="space-y-4">
-                                <div className="p-4 bg-blue-50/30 border border-blue-100 rounded-lg">
-                                    <label htmlFor={`userDietaryRestrictions-${index}`} className="block text-sm font-bold text-blue-800 mb-1">Your Allergies or Additional Dietary Restrictions</label>
-                                    <input
-                                        type="text"
-                                        id={`userDietaryRestrictions-${index}`}
-                                        name="userDietaryRestrictions"
-                                        value={formData.userDietaryRestrictions}
-                                        onChange={(e) => handleInputChange(index, e)}
-                                        placeholder="e.g. Peanut allergy, Gluten-free only"
-                                        className="w-full px-3 py-2 border border-blue-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                                    />
-                                    <div className="mt-2 flex items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            id={`isDietaryRestrictionSerious-${index}`}
-                                            name="isDietaryRestrictionSerious"
-                                            checked={formData.isDietaryRestrictionSerious}
-                                            onChange={(e) => handleInputChange(index, e)}
-                                            className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded cursor-pointer"
-                                        />
-                                        <label htmlFor={`isDietaryRestrictionSerious-${index}`} className="text-sm font-bold text-red-800 cursor-pointer flex items-center gap-1">
-                                            this allergy or restriction is EXTRA serious 💀
-                                        </label>
+                ) : (
+                    <div className="space-y-6">
+                        {dishForms.map((formData, index) => (
+                            <div key={index} className={dishForms.length > 1 ? "p-4 border border-gray-200 rounded-lg bg-gray-50/50 shadow-sm relative animate-fadeIn" : ""}>
+                                {dishForms.length > 1 && (
+                                    <div className="flex justify-between items-center mb-4 border-b border-gray-200 pb-2">
+                                        <h3 className="font-medium text-gray-700">Dish #{index + 1}</h3>
+                                        <button type="button" onClick={() => handleRemoveForm(index)} className="text-red-500 text-sm hover:text-red-700 flex items-center gap-1 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors">
+                                            <span className="text-lg leading-none">&times;</span> Remove
+                                        </button>
                                     </div>
-                                    <p className="text-xs text-blue-600 mt-1 italic">This will appear next to your name on all dishes you bring.</p>
-                                </div>
+                                )}
 
-                                <div className="border-t border-b border-gray-100 py-3">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <input type="checkbox" id={`hasPlusOne-${index}`} name="hasPlusOne" checked={formData.hasPlusOne} onChange={(e) => handleInputChange(index, e)} className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer" />
-                                        <label htmlFor={`hasPlusOne-${index}`} className="text-sm font-medium text-gray-700 cursor-pointer">Bringing a +1?</label>
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                        <label htmlFor={`dishName-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Dish Name</label>
+                                        <input type="text" id={`dishName-${index}`} name="dishName" value={formData.dishName} onChange={(e) => handleInputChange(index, e)} placeholder="e.g., Spicy Black Bean Burgers" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500" />
+                                        </div>
+                                        <div>
+                                            <label htmlFor={`category-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Category</label>
+                                            <select id={`category-${index}`} name="category" value={formData.category} onChange={(e) => handleInputChange(index, e)} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white" >
+                                            {CATEGORIES.map(category => (<option key={category} value={category}>{category}</option>))}
+                                            </select>
+                                        </div>
                                     </div>
-                                    {formData.hasPlusOne && (
-                                        <div className="ml-6 animate-fadeIn">
-                                            <label htmlFor={`plusOneName-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Plus One Name</label>
-                                            <input type="text" id={`plusOneName-${index}`} name="plusOneName" value={formData.plusOneName} onChange={(e) => handleInputChange(index, e)} placeholder="e.g., Partner's Name" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500" />
-                                        </div>
-                                    )}
-                                </div>
 
-                                {activePotluck?.enableCookieSwap && (
-                                    <div className="border-t border-b border-gray-100 py-3 bg-yellow-50/50 rounded-md px-2 my-2 border border-yellow-100">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <input type="checkbox" id={`isParticipatingInCookieSwap-${index}`} name="isParticipatingInCookieSwap" checked={formData.isParticipatingInCookieSwap} onChange={(e) => handleInputChange(index, e)} className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 rounded cursor-pointer" />
-                                            <label htmlFor={`isParticipatingInCookieSwap-${index}`} className="text-sm font-bold text-yellow-800 cursor-pointer">Participating in the CBC Holiday Cookie Swap? 🍪</label>
+                                    {index === 0 && (
+                                    <div className="space-y-4">
+                                        <div className="p-4 bg-blue-50/30 border border-blue-100 rounded-lg">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <label className="block text-sm font-bold text-blue-800">Your allergies and additional dietary restrictions</label>
+                                                <button type="button" onClick={() => setIsProfileEditing(true)} className="text-[10px] text-blue-600 font-bold uppercase underline">Update Profile</button>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2 mb-2">
+                                                {currentUser.personalAllergens.length > 0 ? currentUser.personalAllergens.map(a => (
+                                                    <span key={a.name} className={`text-[10px] font-bold px-2 py-1 rounded-full border flex items-center gap-1 ${a.isSerious ? 'bg-red-100 text-red-700 border-red-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
+                                                        {a.isSerious && <span>💀</span>}
+                                                        {a.name}
+                                                    </span>
+                                                )) : <span className="text-xs text-gray-400 italic">No personal allergens set.</span>}
+                                            </div>
                                         </div>
-                                        {formData.isParticipatingInCookieSwap && (
-                                            <div className="ml-6 animate-fadeIn">
-                                                <label htmlFor={`cookieSwapDescription-${index}`} className="block text-sm font-medium text-gray-600 mb-1">What type of cookies are you bringing?</label>
-                                                <input type="text" id={`cookieSwapDescription-${index}`} name="cookieSwapDescription" value={formData.cookieSwapDescription} onChange={(e) => handleInputChange(index, e)} placeholder="e.g., Gingerbread Men" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500" />
+
+                                        <div className="border-t border-b border-gray-100 py-3">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <input type="checkbox" id={`hasPlusOne-${index}`} name="hasPlusOne" checked={formData.hasPlusOne} onChange={(e) => handleInputChange(index, e)} className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer" />
+                                                <label htmlFor={`hasPlusOne-${index}`} className="text-sm font-medium text-gray-700 cursor-pointer">Bringing a +1?</label>
+                                            </div>
+                                            {formData.hasPlusOne && (
+                                                <div className="ml-6 animate-fadeIn">
+                                                    <label htmlFor={`plusOneName-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Plus One Name</label>
+                                                    <input type="text" id={`plusOneName-${index}`} name="plusOneName" value={formData.plusOneName} onChange={(e) => handleInputChange(index, e)} placeholder="e.g., Partner's Name" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500" />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {activePotluck?.enableCookieSwap && (
+                                            <div className="border-t border-b border-gray-100 py-3 bg-yellow-50/50 rounded-md px-2 my-2 border border-yellow-100">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <input type="checkbox" id={`isParticipatingInCookieSwap-${index}`} name="isParticipatingInCookieSwap" checked={formData.isParticipatingInCookieSwap} onChange={(e) => handleInputChange(index, e)} className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 rounded cursor-pointer" />
+                                                    <label htmlFor={`isParticipatingInCookieSwap-${index}`} className="text-sm font-bold text-yellow-800 cursor-pointer">Participating in the CBC Holiday Cookie Swap? 🍪</label>
+                                                </div>
+                                                {formData.isParticipatingInCookieSwap && (
+                                                    <div className="ml-6 animate-fadeIn">
+                                                        <label htmlFor={`cookieSwapDescription-${index}`} className="block text-sm font-medium text-gray-600 mb-1">What type of cookies are you bringing?</label>
+                                                        <input type="text" id={`cookieSwapDescription-${index}`} name="cookieSwapDescription" value={formData.cookieSwapDescription} onChange={(e) => handleInputChange(index, e)} placeholder="e.g., Gingerbread Men" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500" />
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
-                                )}
-                            </div>
-                            )}
+                                    )}
 
-                            <div>
-                                <label htmlFor={`allergens-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Dish-Specific Major Allergens</label>
-                                <input type="text" id={`allergens-${index}`} name="allergens" value={formData.allergens} onChange={(e) => handleInputChange(index, e)} placeholder="e.g., Nuts, Soy" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500" />
-                                <p className="text-xs text-gray-500 mt-1">Write "N/A" if no major allergens present in this specific dish.</p>
-                            </div>
+                                    <div>
+                                        <label htmlFor={`allergens-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Dish-Specific Major Allergens</label>
+                                        <input type="text" id={`allergens-${index}`} name="allergens" value={formData.allergens} onChange={(e) => handleInputChange(index, e)} placeholder="e.g., Nuts, Soy" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500" />
+                                        <p className="text-xs text-gray-500 mt-1">Write "N/A" if no major allergens present in this specific dish.</p>
+                                    </div>
 
-                            <div>
-                                <label htmlFor={`extras-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Any Extras (optional)</label>
-                                <input type="text" id={`extras-${index}`} name="extras" value={formData.extras || ''} onChange={(e) => handleInputChange(index, e)} placeholder="e.g., Serving spoons" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500" />
-                            </div>
+                                    <div>
+                                        <label htmlFor={`extras-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Any Extras (optional)</label>
+                                        <input type="text" id={`extras-${index}`} name="extras" value={formData.extras || ''} onChange={(e) => handleInputChange(index, e)} placeholder="e.g., Serving spoons" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500" />
+                                    </div>
 
-                            <div>
-                                <label htmlFor={`imageUrl-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Dish Image (optional)</label>
-                                <input type="file" id={`imageUrl-${index}`} name="imageUrl" accept="image/*" onChange={(e) => handleImageChange(index, e)} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100" />
-                                {formData.imageUrl && <div className="mt-4"><img src={formData.imageUrl} alt="Preview" className="w-32 h-32 object-cover rounded-md border border-gray-200" /></div>}
+                                    <div>
+                                        <label htmlFor={`imageUrl-${index}`} className="block text-sm font-medium text-gray-600 mb-1">Dish Image (optional)</label>
+                                        <input type="file" id={`imageUrl-${index}`} name="imageUrl" accept="image/*" onChange={(e) => handleImageChange(index, e)} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100" />
+                                        {formData.imageUrl && <div className="mt-4"><img src={formData.imageUrl} alt="Preview" className="w-32 h-32 object-cover rounded-md border border-gray-200" /></div>}
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                        ))}
                     </div>
-                ))}
+                )}
 
                 <p className="text-sm text-red-600 font-medium">
                     REMINDER: Please ensure all dishes are 100% Vegan 🌱
