@@ -1,17 +1,21 @@
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Dish, Category, Potluck, User, WaitlistEntry, FirstInLineEntry } from './types';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { Dish, Category, Potluck, User, WaitlistEntry, FirstInLineEntry, ActivityLogEntry } from './types';
 import { CATEGORIES } from './constants';
 import DishList from './components/DishList';
 import PotluckMenu from './components/PotluckMenu';
 import AdminModal from './components/AdminModal';
 import PadlockIcon from './components/icons/PadlockIcon';
 import CategoryChart from './components/CategoryChart';
+// Fixed the broken import with a space in the component name
 import DietaryRestrictionsChart from './components/DietaryRestrictionsChart';
 import LoginScreen from './components/LoginScreen';
+import ActivityLog from './components/ActivityLog';
+import CountdownTimer from './components/CountdownTimer';
 
 const WAITLIST_MAX = 10;
 const RESERVATION_HOURS = 24;
+const LOCK_AFTER_HOURS = 24;
 
 const initialFormState = {
   dishName: '',
@@ -57,7 +61,7 @@ const INITIAL_POTLUCKS: Potluck[] = [
         bookTheme: 'Mockingbird Recipes',
         host: 'Developer',
         neighborhood: 'Virtual Garden',
-        date: 'December 12, 2025',
+        date: 'December 7, 2026',
         time: '6:30 PM',
         dishCap: 20,
         enableCookieSwap: true,
@@ -273,6 +277,7 @@ const App: React.FC = () => {
   const [editingDishId, setEditingDishId] = useState<number | null>(null);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const formRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -285,6 +290,18 @@ const App: React.FC = () => {
       }
     }
   }, []);
+
+  const addLogEntry = useCallback((action: ActivityLogEntry['action'], details: string) => {
+    if (!currentUser) return;
+    const newEntry: ActivityLogEntry = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+      timestamp: Date.now(),
+      userName: currentUser.name,
+      action,
+      details
+    };
+    setActivityLog(prev => [...prev.slice(-49), newEntry]); // Keep last 50
+  }, [currentUser]);
 
   // Reservation Expiry Timer
   useEffect(() => {
@@ -299,6 +316,7 @@ const App: React.FC = () => {
             ...nextWaitlist[0],
             expiryTimestamp: now + RESERVATION_HOURS * 60 * 60 * 1000
           } : null;
+          
           return {
             ...p,
             firstInLine: newFirst,
@@ -327,6 +345,16 @@ const App: React.FC = () => {
   const activeWaitlist = activePotluck?.waitlist || [];
   const activeFirstInLine = activePotluck?.firstInLine;
   const dishCap = activePotluck?.dishCap;
+
+  // Logic to determine if potluck is locked (24 hours after start)
+  const isPotluckLocked = useMemo(() => {
+    if (!activePotluck?.date) return false;
+    const startTime = new Date(`${activePotluck.date} ${activePotluck.time || '12:00 PM'}`).getTime();
+    const lockTime = startTime + (LOCK_AFTER_HOURS * 60 * 60 * 1000);
+    return currentTime > lockTime;
+  }, [activePotluck, currentTime]);
+
+  const canModifyActivePotluck = !isPotluckLocked || currentUser?.isAdmin;
   
   const totalAttendees = activeDishes.reduce((acc, dish) => acc + 1 + (dish.hasPlusOne ? 1 : 0), 0);
   const cookieSwapParticipants = new Set(
@@ -399,6 +427,7 @@ const App: React.FC = () => {
   };
 
   const handleStartEdit = (dish: Dish) => {
+    if (!canModifyActivePotluck) return;
     setEditingDishId(dish.id);
     setDishForms([{
       dishName: dish.dishName,
@@ -424,7 +453,10 @@ const App: React.FC = () => {
   };
 
   const handleDeleteDish = (id: number) => {
-    if (window.confirm('Are you sure you want to delete this dish?')) {
+    if (!canModifyActivePotluck) return;
+    const dishToDelete = activeDishes.find(d => d.id === id);
+    if (dishToDelete && window.confirm('Are you sure you want to delete this dish?')) {
+        addLogEntry('deleted', `Removed dish: "${dishToDelete.dishName}"`);
         setPotlucks(prevPotlucks => 
             prevPotlucks.map(p => 
               p.id === selectedPotluckId 
@@ -438,6 +470,10 @@ const App: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
+    if (!canModifyActivePotluck) {
+        setError("This potluck is now archived. Only admins can make changes.");
+        return;
+    }
 
     for (let i = 0; i < dishForms.length; i++) {
         const form = dishForms[i];
@@ -455,6 +491,14 @@ const App: React.FC = () => {
     if (!currentUser.isAdmin && dishCap !== undefined && (currentAttendees + newContribution) > dishCap) {
         setError(`This would exceed the capacity limit of ${dishCap} people. You are trying to add ${newContribution} spots.`);
         return;
+    }
+
+    // Logging
+    if (editingDishId !== null) {
+      addLogEntry('modified', `Updated dish: "${dishForms[0].dishName}"`);
+    } else {
+      const dishNames = dishForms.map(f => `"${f.dishName}"`).join(', ');
+      addLogEntry('added', `Joined/Added dishes: ${dishNames}`);
     }
 
     // Capture user-level info from the first form to apply to all dishes in this entry
@@ -497,8 +541,9 @@ const App: React.FC = () => {
   };
 
   const handleJoinWaitlist = () => {
-    if (!currentUser || isWaitlistFull || isOnWaitlist) return;
+    if (!currentUser || isWaitlistFull || isOnWaitlist || !canModifyActivePotluck) return;
 
+    addLogEntry('joined_waitlist', `Joined the waitlist for "${activePotluck?.name}"`);
     setPotlucks(prevPotlucks => prevPotlucks.map(p => {
       if (p.id !== selectedPotluckId) return p;
       const currentWaitlist = p.waitlist || [];
@@ -515,8 +560,15 @@ const App: React.FC = () => {
   };
 
   const handleLeaveWaitlist = (targetUserId?: string) => {
+    if (!canModifyActivePotluck) return;
     const idToRemove = targetUserId || currentUser?.id;
     if (!idToRemove) return;
+    
+    const entry = activeWaitlist.find(e => e.userId === idToRemove);
+    if (entry) {
+      addLogEntry('left_waitlist', `Left/Removed from waitlist: ${entry.name}`);
+    }
+
     setPotlucks(prevPotlucks => prevPotlucks.map(p => {
       if (p.id !== selectedPotluckId) return p;
       return { ...p, waitlist: (p.waitlist || []).filter(entry => entry.userId !== idToRemove) };
@@ -524,6 +576,11 @@ const App: React.FC = () => {
   };
 
   const handleGiveUpSpot = () => {
+    if (!canModifyActivePotluck) return;
+    if (activeFirstInLine) {
+       addLogEntry('promoted', `Gave up/Removed First In Line spot: ${activeFirstInLine.name}`);
+    }
+
     setPotlucks(prevPotlucks => prevPotlucks.map(p => {
       if (p.id !== selectedPotluckId) return p;
       const nextWaitlist = p.waitlist || [];
@@ -542,32 +599,47 @@ const App: React.FC = () => {
   const handleAdminClick = () => {
     if (currentUser?.isAdmin) { setIsAdminModalOpen(true); return; }
     const password = prompt('Enter admin password:');
-    if (password === 'susscrofadomesticus') {
+    if (password === 'p1gg135') {
       if (currentUser) {
           const adminUser = { ...currentUser, isAdmin: true };
           setCurrentUser(adminUser);
           localStorage.setItem('cvcc_user', JSON.stringify(adminUser));
           setIsAdminModalOpen(true);
+          addLogEntry('promoted', `Unlocked Admin Panel`);
       }
     } else if (password !== null) { alert('Incorrect password.'); }
+  };
+
+  const handleLogoutAdmin = () => {
+    if (currentUser) {
+        const nonAdminUser = { ...currentUser, isAdmin: false };
+        setCurrentUser(nonAdminUser);
+        localStorage.setItem('cvcc_user', JSON.stringify(nonAdminUser));
+        setIsAdminModalOpen(false);
+        addLogEntry('deleted', `Admin privileges revoked`);
+    }
   };
 
   const handleAddPotluck = (potluckData: Omit<Potluck, 'id' | 'dishes'>) => {
     const newPotluck: Potluck = { id: Date.now(), ...potluckData, dishes: [], waitlist: [], firstInLine: null };
     setPotlucks(prev => [...prev, newPotluck]);
     setSelectedPotluckId(newPotluck.id); 
+    addLogEntry('added', `Created new potluck event: "${potluckData.name}"`);
   };
 
   const handleDeletePotluck = (id: number) => {
+    const p = potlucks.find(pot => pot.id === id);
     setPotlucks(prev => {
       const newPotlucks = prev.filter(p => p.id !== id);
       if (selectedPotluckId === id) setSelectedPotluckId(newPotlucks[0]?.id || -1);
       return newPotlucks;
     });
+    if (p) addLogEntry('deleted', `Deleted potluck event: "${p.name}"`);
   };
 
   const handleEditPotluck = (id: number, potluckData: Partial<Omit<Potluck, 'id' | 'dishes'>>) => {
     setPotlucks(prev => prev.map(p => (p.id === id ? { ...p, ...potluckData } : p)));
+    addLogEntry('modified', `Updated potluck details: "${potluckData.name}"`);
   };
 
   const formatTime = (ms: number) => {
@@ -580,7 +652,7 @@ const App: React.FC = () => {
 
   if (!currentUser) return <LoginScreen onJoin={handleJoin} />;
 
-  const canAddDish = !isFull || isFirstInLineUser || editingDishId !== null || currentUser?.isAdmin;
+  const canAddDish = canModifyActivePotluck && (!isFull || isFirstInLineUser || editingDishId !== null || currentUser?.isAdmin);
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800 font-sans p-4 sm:p-6 lg:p-8">
@@ -643,6 +715,25 @@ const App: React.FC = () => {
         </header>
 
         <main>
+          {/* Admin Activity Log - Visible only to Admins */}
+          {currentUser.isAdmin && (
+            <ActivityLog entries={activityLog} />
+          )}
+
+          {/* Locked Status Banner */}
+          {isPotluckLocked && (
+              <div className="bg-gray-100 border-2 border-gray-300 rounded-xl p-4 mb-6 flex items-center justify-center gap-3 animate-fadeIn">
+                  <span className="text-2xl">🔒</span>
+                  <div className="text-center">
+                      <p className="font-bold text-gray-700 uppercase tracking-wide">Archived Potluck</p>
+                      <p className="text-xs text-gray-500">24 hours have passed since the event start. Modifications are now disabled for members.</p>
+                  </div>
+              </div>
+          )}
+
+          {/* Celebratory Countdown Timer */}
+          <CountdownTimer date={activePotluck?.date} time={activePotluck?.time} />
+
           {/* First In Line Section */}
           {activeFirstInLine && (
             <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-6 sm:p-8 rounded-xl shadow-lg mb-8 border-2 border-amber-200 animate-fadeIn relative overflow-hidden">
@@ -670,7 +761,7 @@ const App: React.FC = () => {
 
                {(activeFirstInLine.userId === currentUser.id || currentUser.isAdmin) && (
                  <div className="mt-6 flex flex-wrap gap-4">
-                    {activeFirstInLine.userId === currentUser.id && (
+                    {activeFirstInLine.userId === currentUser.id && canModifyActivePotluck && (
                         <button 
                           onClick={handleScrollToForm}
                           className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-md transition-all active:scale-95 flex items-center gap-2"
@@ -680,7 +771,8 @@ const App: React.FC = () => {
                     )}
                     <button 
                       onClick={handleGiveUpSpot}
-                      className={`px-6 py-3 bg-white font-bold rounded-lg transition-all active:scale-95 border-2 ${currentUser.isAdmin && activeFirstInLine.userId !== currentUser.id ? 'text-orange-600 border-orange-100 hover:bg-orange-50' : 'text-red-600 border-red-100 hover:bg-red-50'}`}
+                      disabled={!canModifyActivePotluck}
+                      className={`px-6 py-3 bg-white font-bold rounded-lg transition-all active:scale-95 border-2 disabled:opacity-50 disabled:cursor-not-allowed ${currentUser.isAdmin && activeFirstInLine.userId !== currentUser.id ? 'text-orange-600 border-orange-100 hover:bg-orange-50' : 'text-red-600 border-red-100 hover:bg-red-50'}`}
                     >
                       {currentUser.isAdmin && activeFirstInLine.userId !== currentUser.id ? 'Remove User' : 'Give Up Spot'}
                     </button>
@@ -715,7 +807,10 @@ const App: React.FC = () => {
                           {entry.name} {entry.userId === currentUser.id && <span className="text-xs text-indigo-500 font-bold ml-1">(You)</span>}
                         </span>
                         {(entry.userId === currentUser.id || currentUser.isAdmin) && (
-                          <button onClick={() => handleLeaveWaitlist(entry.userId)} className={`text-xs font-bold px-2 py-1 rounded border transition-colors ${currentUser.isAdmin && entry.userId !== currentUser.id ? 'text-orange-600 border-orange-100 hover:bg-orange-50' : 'text-red-500 border-red-100 hover:bg-red-50'}`}>
+                          <button 
+                            onClick={() => handleLeaveWaitlist(entry.userId)} 
+                            disabled={!canModifyActivePotluck}
+                            className={`text-xs font-bold px-2 py-1 rounded border transition-colors disabled:opacity-50 ${currentUser.isAdmin && entry.userId !== currentUser.id ? 'text-orange-600 border-orange-100 hover:bg-orange-50' : 'text-red-500 border-red-100 hover:bg-red-50'}`}>
                             {currentUser.isAdmin && entry.userId !== currentUser.id ? 'Remove' : 'Leave'}
                           </button>
                         )}
@@ -729,7 +824,7 @@ const App: React.FC = () => {
                 )}
               </div>
 
-              {!isOnWaitlist && !isWaitlistFull && !isFirstInLineUser && (
+              {!isOnWaitlist && !isWaitlistFull && !isFirstInLineUser && canModifyActivePotluck && (
                 <button 
                   onClick={handleJoinWaitlist}
                   className="w-full sm:w-auto px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-md transition-all active:scale-95"
@@ -741,6 +836,11 @@ const App: React.FC = () => {
                 <p className="text-center text-sm text-indigo-400 font-medium">
                   The waitlist is currently full.
                 </p>
+              )}
+              {isPotluckLocked && !currentUser?.isAdmin && (
+                  <p className="text-center text-sm text-gray-400 font-medium">
+                      Waitlist management is closed for this archived potluck.
+                  </p>
               )}
             </div>
           )}
@@ -790,7 +890,11 @@ const App: React.FC = () => {
             <fieldset disabled={!canAddDish} className="group disabled:opacity-60">
                 <form onSubmit={handleSubmit} className="space-y-6">
                 
-                {dishForms.map((formData, index) => (
+                {isPotluckLocked && !currentUser?.isAdmin ? (
+                    <div className="text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                        <p className="text-gray-500 font-medium">This potluck is locked. No new dishes can be added.</p>
+                    </div>
+                ) : dishForms.map((formData, index) => (
                     <div key={index} className={dishForms.length > 1 ? "p-4 border border-gray-200 rounded-lg bg-gray-50/50 shadow-sm relative animate-fadeIn" : ""}>
                         {dishForms.length > 1 && (
                             <div className="flex justify-between items-center mb-4 border-b border-gray-200 pb-2">
@@ -924,10 +1028,25 @@ const App: React.FC = () => {
           
           <DietaryRestrictionsChart dishes={activeDishes} />
 
-          <DishList dishes={activeDishes} currentUserId={currentUser.id} isAdmin={currentUser.isAdmin} onEdit={handleStartEdit} onDelete={handleDeleteDish} />
+          <DishList 
+            dishes={activeDishes} 
+            currentUserId={currentUser.id} 
+            isAdmin={currentUser.isAdmin} 
+            isPotluckLocked={isPotluckLocked}
+            onEdit={handleStartEdit} 
+            onDelete={handleDeleteDish} 
+          />
         </main>
       </div>
-      <AdminModal isOpen={isAdminModalOpen} onClose={() => setIsAdminModalOpen(false)} potlucks={potlucks} onAdd={handleAddPotluck} onEdit={handleEditPotluck} onDelete={handleDeletePotluck} />
+      <AdminModal 
+        isOpen={isAdminModalOpen} 
+        onClose={() => setIsAdminModalOpen(false)} 
+        potlucks={potlucks} 
+        onAdd={handleAddPotluck} 
+        onEdit={handleEditPotluck} 
+        onDelete={handleDeletePotluck} 
+        onLogoutAdmin={handleLogoutAdmin}
+      />
     </div>
   );
 };

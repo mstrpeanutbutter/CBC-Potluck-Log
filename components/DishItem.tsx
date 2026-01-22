@@ -7,13 +7,16 @@ interface DishItemProps {
   dish: Dish;
   currentUserId: string;
   isAdmin: boolean;
+  isPotluckLocked: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-const DishItem: React.FC<DishItemProps> = ({ dish, currentUserId, isAdmin, onEdit, onDelete }) => {
+const DishItem: React.FC<DishItemProps> = ({ dish, currentUserId, isAdmin, isPotluckLocked, onEdit, onDelete }) => {
   const categoryColor = CATEGORY_COLORS[dish.category];
-  const canModify = isAdmin || (dish.userId === currentUserId);
+  
+  // Rule: Admins can always modify. Users can modify their own dish ONLY if potluck is not locked.
+  const canModify = isAdmin || (dish.userId === currentUserId && !isPotluckLocked);
 
   return (
     <div className="border border-gray-200 rounded-lg p-4 flex flex-col sm:flex-row gap-4 transition-shadow hover:shadow-md bg-gray-50/50">
@@ -67,6 +70,11 @@ const DishItem: React.FC<DishItemProps> = ({ dish, currentUserId, isAdmin, onEdi
                 <button onClick={onEdit} aria-label={`Edit ${dish.dishName}`} className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors">Edit</button>
                 <button onClick={onDelete} aria-label={`Delete ${dish.dishName}`} className="text-sm text-red-600 hover:text-red-800 font-medium transition-colors">Delete</button>
             </div>
+          )}
+          {isPotluckLocked && !isAdmin && dish.userId === currentUserId && (
+              <span className="text-[10px] text-gray-400 italic flex items-center gap-1">
+                  <span>🔒</span> Read-only (Archived)
+              </span>
           )}
         </div>
       </div>

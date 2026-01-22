@@ -43,6 +43,14 @@ export interface FirstInLineEntry extends WaitlistEntry {
   expiryTimestamp: number;
 }
 
+export interface ActivityLogEntry {
+  id: string;
+  timestamp: number;
+  userName: string;
+  action: 'added' | 'deleted' | 'modified' | 'joined_waitlist' | 'left_waitlist' | 'promoted';
+  details: string;
+}
+
 export interface Potluck {
   id: number;
   name: string;

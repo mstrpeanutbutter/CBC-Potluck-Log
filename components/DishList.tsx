@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Dish, Category } from '../types';
 import CategorySection from './CategorySection';
@@ -7,11 +8,12 @@ interface DishListProps {
   dishes: Dish[];
   currentUserId: string;
   isAdmin: boolean;
+  isPotluckLocked: boolean;
   onEdit: (dish: Dish) => void;
   onDelete: (id: number) => void;
 }
 
-const DishList: React.FC<DishListProps> = ({ dishes, currentUserId, isAdmin, onEdit, onDelete }) => {
+const DishList: React.FC<DishListProps> = ({ dishes, currentUserId, isAdmin, isPotluckLocked, onEdit, onDelete }) => {
   const groupedDishes = dishes.reduce((acc, dish) => {
     const category = dish.category;
     if (!acc[category]) {
@@ -39,6 +41,7 @@ const DishList: React.FC<DishListProps> = ({ dishes, currentUserId, isAdmin, onE
               dishes={groupedDishes[category]}
               currentUserId={currentUserId}
               isAdmin={isAdmin}
+              isPotluckLocked={isPotluckLocked}
               onEdit={onEdit}
               onDelete={onDelete}
             />

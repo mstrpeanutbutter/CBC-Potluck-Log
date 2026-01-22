@@ -9,6 +9,7 @@ interface AdminModalProps {
   onAdd: (potluckData: Omit<Potluck, 'id' | 'dishes'>) => void;
   onEdit: (id: number, potluckData: Partial<Omit<Potluck, 'id' | 'dishes'>>) => void;
   onDelete: (id: number) => void;
+  onLogoutAdmin: () => void;
 }
 
 interface PotluckFormState {
@@ -108,7 +109,7 @@ const PotluckFormFields: React.FC<{
 );
 
 
-const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose, potlucks, onAdd, onEdit, onDelete }) => {
+const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose, potlucks, onAdd, onEdit, onDelete, onLogoutAdmin }) => {
   const [view, setView] = useState<'menu' | 'add' | 'editList' | 'editForm' | 'delete'>('menu');
   const [potluckForm, setPotluckForm] = useState<PotluckFormState>(initialPotluckFormState);
   const [editingFormState, setEditingFormState] = useState<PotluckFormState | null>(null);
@@ -190,6 +191,7 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose, potlucks, onAd
         <button onClick={() => setView('add')} className="w-full text-left py-3 px-4 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors font-medium text-gray-700">Add a new potluck</button>
         <button onClick={() => setView('editList')} className="w-full text-left py-3 px-4 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors font-medium text-gray-700">Edit an existing potluck</button>
         <button onClick={() => setView('delete')} className="w-full text-left py-3 px-4 bg-gray-50 hover:bg-red-50 rounded-md transition-colors font-medium text-red-700">Delete an existing potluck</button>
+        <button onClick={onLogoutAdmin} className="w-full text-left py-3 px-4 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors font-medium text-gray-600 border border-gray-200">Log out as Admin</button>
     </div>
   );
   
