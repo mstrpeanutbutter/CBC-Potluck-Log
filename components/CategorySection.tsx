@@ -12,6 +12,8 @@ interface CategorySectionProps {
   isPotluckLocked: boolean;
   onEdit: (dish: Dish) => void;
   onDelete: (id: number) => void;
+  onAddComment: (dishId: number, text: string) => void;
+  onDeleteComment: (dishId: number, commentId: string) => void;
 }
 
 const ChevronIcon: React.FC<{ isOpen: boolean }> = ({ isOpen }) => (
@@ -27,7 +29,17 @@ const ChevronIcon: React.FC<{ isOpen: boolean }> = ({ isOpen }) => (
 );
 
 
-const CategorySection: React.FC<CategorySectionProps> = ({ category, dishes, currentUserId, isAdmin, isPotluckLocked, onEdit, onDelete }) => {
+const CategorySection: React.FC<CategorySectionProps> = ({ 
+  category, 
+  dishes, 
+  currentUserId, 
+  isAdmin, 
+  isPotluckLocked, 
+  onEdit, 
+  onDelete,
+  onAddComment,
+  onDeleteComment
+}) => {
   const [isOpen, setIsOpen] = useState(true);
   const categoryColorClasses = CATEGORY_COLORS[category] || 'bg-gray-100 text-gray-800 border-gray-200';
   const headerBgClass = categoryColorClasses.split(' ')[0].replace('bg-', 'bg-') + '/20';
@@ -56,6 +68,8 @@ const CategorySection: React.FC<CategorySectionProps> = ({ category, dishes, cur
               isPotluckLocked={isPotluckLocked}
               onEdit={() => onEdit(dish)}
               onDelete={() => onDelete(dish.id)}
+              onAddComment={onAddComment}
+              onDeleteComment={onDeleteComment}
             />
           ))}
         </div>

@@ -23,6 +23,14 @@ export interface User {
   isDietaryRestrictionSerious: boolean; // Retained as a global flag for "any serious" or overall status
 }
 
+export interface Comment {
+  id: string;
+  userId: string;
+  userName: string;
+  text: string;
+  timestamp: number;
+}
+
 export interface Dish {
   id: number;
   dishName: string;
@@ -38,6 +46,7 @@ export interface Dish {
   cookieSwapDescription?: string;
   userDietaryRestrictions?: string;
   isDietaryRestrictionSerious?: boolean;
+  comments?: Comment[];
 }
 
 export interface WaitlistEntry {
@@ -54,7 +63,7 @@ export interface ActivityLogEntry {
   id: string;
   timestamp: number;
   userName: string;
-  action: 'added' | 'deleted' | 'modified' | 'joined_waitlist' | 'left_waitlist' | 'promoted';
+  action: 'added' | 'deleted' | 'modified' | 'joined_waitlist' | 'left_waitlist' | 'promoted' | 'commented';
   details: string;
 }
 

@@ -11,9 +11,20 @@ interface DishListProps {
   isPotluckLocked: boolean;
   onEdit: (dish: Dish) => void;
   onDelete: (id: number) => void;
+  onAddComment: (dishId: number, text: string) => void;
+  onDeleteComment: (dishId: number, commentId: string) => void;
 }
 
-const DishList: React.FC<DishListProps> = ({ dishes, currentUserId, isAdmin, isPotluckLocked, onEdit, onDelete }) => {
+const DishList: React.FC<DishListProps> = ({ 
+  dishes, 
+  currentUserId, 
+  isAdmin, 
+  isPotluckLocked, 
+  onEdit, 
+  onDelete,
+  onAddComment,
+  onDeleteComment
+}) => {
   const groupedDishes = dishes.reduce((acc, dish) => {
     const category = dish.category;
     if (!acc[category]) {
@@ -44,6 +55,8 @@ const DishList: React.FC<DishListProps> = ({ dishes, currentUserId, isAdmin, isP
               isPotluckLocked={isPotluckLocked}
               onEdit={onEdit}
               onDelete={onDelete}
+              onAddComment={onAddComment}
+              onDeleteComment={onDeleteComment}
             />
           ))}
         </div>

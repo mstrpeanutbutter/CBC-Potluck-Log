@@ -17,6 +17,7 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ entries }) => {
       case 'deleted': return 'text-red-400';
       case 'modified': return 'text-blue-400';
       case 'promoted': return 'text-amber-400';
+      case 'commented': return 'text-pink-400';
       default: return 'text-gray-400';
     }
   };

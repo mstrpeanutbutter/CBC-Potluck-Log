@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Dish, Category, Potluck, User, WaitlistEntry, FirstInLineEntry, ActivityLogEntry, PersonalAllergen } from './types';
+import { Dish, Category, Potluck, User, WaitlistEntry, FirstInLineEntry, ActivityLogEntry, PersonalAllergen, Comment } from './types';
 import { CATEGORIES } from './constants';
 import DishList from './components/DishList';
 import PotluckMenu from './components/PotluckMenu';
@@ -87,7 +87,10 @@ const INITIAL_POTLUCKS: Potluck[] = [
                 userDietaryRestrictions: "Gluten-Free",
                 isDietaryRestrictionSerious: true,
                 hasPlusOne: true,
-                plusOneName: "Charlie"
+                plusOneName: "Charlie",
+                comments: [
+                    { id: 'c1', userId: 'user_bob', userName: 'Bob Vegan', text: 'This sounds delicious! Can\'t wait.', timestamp: Date.now() - 3600000 }
+                ]
             },
             {
                 id: 102,
@@ -554,6 +557,43 @@ const App: React.FC = () => {
         return { ...p, dishes: updatedDishes, firstInLine: updatedFirstInLine };
     }));
     handleCancelEdit();
+  };
+
+  const handleAddComment = (dishId: number, text: string) => {
+    if (!currentUser || !text.trim()) return;
+
+    const newComment: Comment = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
+      userId: currentUser.id,
+      userName: currentUser.name,
+      text: text.trim(),
+      timestamp: Date.now()
+    };
+
+    setPotlucks(prev => prev.map(p => {
+      if (p.id !== selectedPotluckId) return p;
+      return {
+        ...p,
+        dishes: p.dishes.map(d => d.id === dishId ? { ...d, comments: [...(d.comments || []), newComment] } : d)
+      };
+    }));
+    addLogEntry('commented', `Commented on "${activeDishes.find(d => d.id === dishId)?.dishName}"`);
+  };
+
+  const handleDeleteComment = (dishId: number, commentId: string) => {
+    setPotlucks(prev => prev.map(p => {
+      if (p.id !== selectedPotluckId) return p;
+      return {
+        ...p,
+        dishes: p.dishes.map(d => {
+          if (d.id !== dishId) return d;
+          return {
+            ...d,
+            comments: (d.comments || []).filter(c => c.id !== commentId)
+          };
+        })
+      };
+    }));
   };
 
   const handleJoinWaitlist = () => {
@@ -1072,6 +1112,8 @@ const App: React.FC = () => {
             isPotluckLocked={isPotluckLocked}
             onEdit={handleStartEdit} 
             onDelete={handleDeleteDish} 
+            onAddComment={handleAddComment}
+            onDeleteComment={handleDeleteComment}
           />
         </main>
       </div>
